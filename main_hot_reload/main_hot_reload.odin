@@ -2,12 +2,12 @@
 
 package main
 
+import sapp "../sokol/app"
+import slog "../sokol/log"
+import "core:c/libc"
 import "core:dynlib"
 import "core:fmt"
-import "core:c/libc"
 import "core:os"
-import "core:log"
-import "core:mem"
 
 when ODIN_OS == .Windows {
 	DLL_EXT :: ".dll"
@@ -36,19 +36,17 @@ copy_dll :: proc(to: string) -> bool {
 }
 
 Game_API :: struct {
-	lib: dynlib.Library,
-	init_window: proc(),
-	init: proc(),
-	update: proc() -> bool,
-	shutdown: proc(),
-	shutdown_window: proc(),
-	memory: proc() -> rawptr,
-	memory_size: proc() -> int,
-	hot_reloaded: proc(mem: rawptr),
-	force_reload: proc() -> bool,
-	force_restart: proc() -> bool,
+	lib:               dynlib.Library,
+	init:              proc "c" (),
+	update:            proc "c" (),
+	shutdown:          proc "c" (),
+	memory:            proc() -> rawptr,
+	memory_size:       proc() -> int,
+	hot_reloaded:      proc(mem: rawptr),
+	force_reload:      proc() -> bool,
+	force_restart:     proc() -> bool,
 	modification_time: os.File_Time,
-	api_version: int,
+	api_version:       int,
 }
 
 load_game_api :: proc(api_version: int) -> (api: Game_API, ok: bool) {
@@ -62,7 +60,11 @@ load_game_api :: proc(api_version: int) -> (api: Game_API, ok: bool) {
 	}
 
 	// NOTE: this needs to be a relative path for Linux to work.
-	game_dll_name := fmt.tprintf("{0}game_{1}" + DLL_EXT, "./" when ODIN_OS != .Windows else "", api_version)
+	game_dll_name := fmt.tprintf(
+		"{0}game_{1}" + DLL_EXT,
+		"./" when ODIN_OS != .Windows else "",
+		api_version,
+	)
 	copy_dll(game_dll_name) or_return
 
 	// This proc matches the names of the fields in Game_API to symbols in the
@@ -92,27 +94,23 @@ unload_game_api :: proc(api: ^Game_API) {
 	}
 }
 
+init :: proc "c" (userdata: rawptr) {
+    game_api := cast(^Game_API)userdata
+    game_api.init()
+}
+
+update :: proc "c" (userdata: rawptr) {
+    game_api := cast(^Game_API)userdata
+    game_api.update()
+}
+
+shutdown :: proc "c" (userdata: rawptr) {
+    game_api := cast(^Game_API)userdata
+    game_api.shutdown()
+}
+
 main :: proc() {
-	context.logger = log.create_console_logger()
-
-	default_allocator := context.allocator
-	tracking_allocator: mem.Tracking_Allocator
-	mem.tracking_allocator_init(&tracking_allocator, default_allocator)
-	context.allocator = mem.tracking_allocator(&tracking_allocator)
-
-	reset_tracking_allocator :: proc(a: ^mem.Tracking_Allocator) -> bool {
-		err := false
-
-		for _, value in a.allocation_map {
-			fmt.printf("%v: Leaked %v bytes\n", value.location, value.size)
-			err = true
-		}
-
-		mem.tracking_allocator_clear(a)
-		return err
-	}
-
-	game_api_version := 0
+   	game_api_version := 0
 	game_api, game_api_ok := load_game_api(game_api_version)
 
 	if !game_api_ok {
@@ -120,15 +118,27 @@ main :: proc() {
 		return
 	}
 
-	game_api_version += 1
-	game_api.init_window()
-	game_api.init()
+    sapp.run(
+		{
+		      user_data = &game_api,
+		    init_userdata_cb = init,
+			frame_userdata_cb = update,
+			cleanup_userdata_cb = shutdown,
+			width = 1280,
+			height = 720,
+			window_title = "Odin + Sokol",
+			icon = {sokol_default = true},
+			logger = {func = slog.func},
+		},
+	)
 
-	old_game_apis := make([dynamic]Game_API, default_allocator)
+	// todo
+	// - free temp allocator, from update?
+	// - force reload
+	// - force restart
+	// - reload loop
 
-	window_open := true
-	for window_open {
-		window_open = game_api.update()
+	/*
 		force_reload := game_api.force_reload()
 		force_restart := game_api.force_restart()
 		reload := force_reload || force_restart
@@ -142,7 +152,8 @@ main :: proc() {
 			new_game_api, new_game_api_ok := load_game_api(game_api_version)
 
 			if new_game_api_ok {
-				force_restart = force_restart || game_api.memory_size() != new_game_api.memory_size()
+				force_restart =
+					force_restart || game_api.memory_size() != new_game_api.memory_size()
 
 				if !force_restart {
 					// This does the normal hot reload
@@ -193,26 +204,7 @@ main :: proc() {
 		}
 
 		free_all(context.temp_allocator)
-	}
-
-	free_all(context.temp_allocator)
-	game_api.shutdown()
-	if reset_tracking_allocator(&tracking_allocator) {
-		// This prevents the game from closing without you seeing the memory
-		// leaks. This is mostly needed because I use Sublime Text and my game's
-		// console isn't hooked up into Sublime's console properly.
-		libc.getchar()
-	}
-
-	for &g in old_game_apis {
-		unload_game_api(&g)
-	}
-
-	delete(old_game_apis)
-
-	game_api.shutdown_window()
-	unload_game_api(&game_api)
-	mem.tracking_allocator_destroy(&tracking_allocator)
+	}*/
 }
 
 // Make game use good GPU on laptops.

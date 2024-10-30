@@ -14,38 +14,24 @@
 
 package game
 
-import "core:math/linalg"
-import "core:fmt"
+import "base:runtime"
+//import "core:math/linalg"
+import sg "../sokol/gfx"
+import slog "../sokol/log"
+import sglue "../sokol/glue"
 import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
 
 Game_Memory :: struct {
-	player_pos: rl.Vector2,
 	some_number: int,
+	pass_action: sg.Pass_Action,
 }
 
 g_mem: ^Game_Memory
 
-game_camera :: proc() -> rl.Camera2D {
-	w := f32(rl.GetScreenWidth())
-	h := f32(rl.GetScreenHeight())
-
-	return {
-		zoom = h/PIXEL_WINDOW_HEIGHT,
-		target = g_mem.player_pos,
-		offset = { w/2, h/2 },
-	}
-}
-
-ui_camera :: proc() -> rl.Camera2D {
-	return {
-		zoom = f32(rl.GetScreenHeight())/PIXEL_WINDOW_HEIGHT,
-	}
-}
-
 update :: proc() {
-	input: rl.Vector2
+	/*input: rl.Vector2
 
 	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
 		input.y -= 1
@@ -61,33 +47,26 @@ update :: proc() {
 	}
 
 	input = linalg.normalize0(input)
-	g_mem.player_pos += input * rl.GetFrameTime() * 100
+	g_mem.player_pos += input * rl.GetFrameTime() * 100*/
 	g_mem.some_number += 1
+
+	g := g_mem.pass_action.colors[0].clear_value.g + 0.01
+	g_mem.pass_action.colors[0].clear_value.g = g > 1.0 ? 0.0 : g
 }
 
 draw :: proc() {
-	rl.BeginDrawing()
-	rl.ClearBackground(rl.BLACK)
 
-	rl.BeginMode2D(game_camera())
-	rl.DrawRectangleV(g_mem.player_pos, {10, 20}, rl.WHITE)
-	rl.DrawRectangleV({20, 20}, {10, 10}, rl.RED)
-	rl.DrawRectangleV({-30, -20}, {10, 10}, rl.GREEN)
-	rl.EndMode2D()
-
-	rl.BeginMode2D(ui_camera())
-	// Note: main_hot_reload.odin clears the temp allocator at end of frame.
-	rl.DrawText(fmt.ctprintf("some_number: %v\nplayer_pos: %v", g_mem.some_number, g_mem.player_pos), 5, 5, 8, rl.WHITE)
-	rl.EndMode2D()
-
-	rl.EndDrawing()
+	sg.begin_pass({action = g_mem.pass_action, swapchain = sglue.swapchain()})
+	sg.end_pass()
+	sg.commit()
 }
 
 @(export)
-game_update :: proc() -> bool {
+game_update :: proc "c" () {
+	context = runtime.default_context()
 	update()
 	draw()
-	return !rl.WindowShouldClose()
+	//return !rl.WindowShouldClose()
 }
 
 @(export)
@@ -99,18 +78,24 @@ game_init_window :: proc() {
 }
 
 @(export)
-game_init :: proc() {
-	g_mem = new(Game_Memory)
+game_init :: proc "c" () {
+	context = runtime.default_context()
 
+	sg.setup({environment = sglue.environment(), logger = {func = slog.func}})
+
+	g_mem = new(Game_Memory)
 	g_mem^ = Game_Memory {
 		some_number = 100,
 	}
+	g_mem.pass_action.colors[0] = { load_action = .CLEAR, clear_value = {1.0, 0.0, 0.0, 1.0}}
 
 	game_hot_reloaded(g_mem)
 }
 
 @(export)
-game_shutdown :: proc() {
+game_shutdown :: proc "c" () {
+	context = runtime.default_context()
+	sg.shutdown()
 	free(g_mem)
 }
 

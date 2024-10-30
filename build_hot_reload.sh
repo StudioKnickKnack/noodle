@@ -3,6 +3,7 @@
 # NOTE: this is a recent addition to the Odin compiler, if you don't have this command
 # you can change this to the path to the Odin folder that contains vendor, eg: "~/Odin".
 ROOT=$(odin root)
+PROJECT=$(dirname "$0")
 if [ ! $? -eq 0 ]; then
     echo "Your Odin compiler does not have the 'odin root' command, please update or hardcode it in the script."
     exit 1
@@ -18,8 +19,16 @@ case $(uname) in
     *)       LIB_PATH="macos" ;;
     esac
 
+    SOKOL_DYLIB_DIR="$PROJECT/sokol/dylib"
+    SOKOL_DYLIB_NAME="sokol_dylib_macos_arm64_metal_debug.dylib"
+    cp $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
+    install_name_tool -id @loader_path/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
+
     DLL_EXT=".dylib"
-    EXTRA_LINKER_FLAGS="-Wl,-rpath $ROOT/vendor/raylib/$LIB_PATH"
+    EXTRA_LINKER_FLAGS="-v -Wl,-rpath $ROOT/vendor/raylib/$LIB_PATH"
+    EXTRA_LINKER_FLAGS="$EXTRA_LINKER_FLAGS -Wl,$SOKOL_DYLIB_NAME"
+
+
     ;;
 *)
     DLL_EXT=".so"
@@ -47,5 +56,5 @@ if pgrep -f game_hot_reload.bin > /dev/null; then
     exit 1
 else
     echo "Building game_hot_reload.bin"
-    odin build main_hot_reload -out:game_hot_reload.bin -strict-style -vet -debug
+    odin build main_hot_reload -extra-linker-flags:"-Wl,sokol_dylib_macos_arm64_metal_debug.dylib" -out:game_hot_reload.bin -strict-style -vet -debug
 fi
