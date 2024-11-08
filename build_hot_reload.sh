@@ -21,12 +21,12 @@ case $(uname) in
 
     SOKOL_DYLIB_DIR="$PROJECT/sokol/dylib"
     SOKOL_DYLIB_NAME="sokol_dylib_macos_arm64_metal_debug.dylib"
+    install_name_tool -id @loader_path/sokol/dylib/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME
     cp $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
-    install_name_tool -id @loader_path/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
 
     DLL_EXT=".dylib"
     EXTRA_LINKER_FLAGS="-v -Wl,-rpath $ROOT/vendor/raylib/$LIB_PATH"
-    EXTRA_LINKER_FLAGS="$EXTRA_LINKER_FLAGS -Wl,$SOKOL_DYLIB_NAME"
+    #EXTRA_LINKER_FLAGS="$EXTRA_LINKER_FLAGS -Wl,$SOKOL_DIR/app/sokol_app$SOKOL_LIB_SUFFIX"
 
 
     ;;
@@ -44,7 +44,7 @@ esac
 
 # Build the game.
 echo "Building game$DLL_EXT"
-odin build game -extra-linker-flags:"$EXTRA_LINKER_FLAGS" -define:RAYLIB_SHARED=true -build-mode:dll -out:game_tmp$DLL_EXT -strict-style -vet -debug
+odin build game -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -define:RAYLIB_SHARED=true -build-mode:dll -out:game_tmp$DLL_EXT -strict-style -vet -debug
 
 # Need to use a temp file on Linux because it first writes an empty `game.so`, which the game will load before it is actually fully written.
 mv game_tmp$DLL_EXT game$DLL_EXT
@@ -56,5 +56,5 @@ if pgrep -f game_hot_reload.bin > /dev/null; then
     exit 1
 else
     echo "Building game_hot_reload.bin"
-    odin build main_hot_reload -extra-linker-flags:"-Wl,sokol_dylib_macos_arm64_metal_debug.dylib" -out:game_hot_reload.bin -strict-style -vet -debug
+    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:game_hot_reload.bin -strict-style -vet -debug
 fi

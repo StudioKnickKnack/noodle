@@ -14,11 +14,11 @@
 
 package game
 
-import "base:runtime"
 //import "core:math/linalg"
 import sg "../sokol/gfx"
-import slog "../sokol/log"
 import sglue "../sokol/glue"
+import slog "../sokol/log"
+import "base:runtime"
 import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
@@ -50,8 +50,8 @@ update :: proc() {
 	g_mem.player_pos += input * rl.GetFrameTime() * 100*/
 	g_mem.some_number += 1
 
-	g := g_mem.pass_action.colors[0].clear_value.g + 0.01
-	g_mem.pass_action.colors[0].clear_value.g = g > 1.0 ? 0.0 : g
+	g := g_mem.pass_action.colors[0].clear_value.g - 0.001
+	g_mem.pass_action.colors[0].clear_value.g = g < 0.0 ? 1.0 : g
 }
 
 draw :: proc() {
@@ -62,8 +62,7 @@ draw :: proc() {
 }
 
 @(export)
-game_update :: proc "c" () {
-	context = runtime.default_context()
+game_update :: proc() {
 	update()
 	draw()
 	//return !rl.WindowShouldClose()
@@ -87,7 +86,10 @@ game_init :: proc "c" () {
 	g_mem^ = Game_Memory {
 		some_number = 100,
 	}
-	g_mem.pass_action.colors[0] = { load_action = .CLEAR, clear_value = {1.0, 0.0, 0.0, 1.0}}
+	g_mem.pass_action.colors[0] = {
+		load_action = .CLEAR,
+		clear_value = {1.0, 0.0, 0.0, 1.0},
+	}
 
 	game_hot_reloaded(g_mem)
 }

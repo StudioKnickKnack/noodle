@@ -4,9 +4,11 @@ package main
 
 import sapp "../sokol/app"
 import slog "../sokol/log"
+import "base:runtime"
 import "core:c/libc"
 import "core:dynlib"
 import "core:fmt"
+import "core:mem"
 import "core:os"
 
 when ODIN_OS == .Windows {
@@ -36,17 +38,20 @@ copy_dll :: proc(to: string) -> bool {
 }
 
 Game_API :: struct {
-	lib:               dynlib.Library,
-	init:              proc "c" (),
-	update:            proc "c" (),
-	shutdown:          proc "c" (),
-	memory:            proc() -> rawptr,
-	memory_size:       proc() -> int,
-	hot_reloaded:      proc(mem: rawptr),
-	force_reload:      proc() -> bool,
-	force_restart:     proc() -> bool,
-	modification_time: os.File_Time,
-	api_version:       int,
+	lib:                dynlib.Library,
+	init:               proc "c" (),
+	update:             proc "c" (),
+	shutdown:           proc "c" (),
+	memory:             proc() -> rawptr,
+	memory_size:        proc() -> int,
+	hot_reloaded:       proc(mem: rawptr),
+	force_reload:       proc() -> bool,
+	force_restart:      proc() -> bool,
+	modification_time:  os.File_Time,
+	api_version:        int,
+	default_allocator:  mem.Allocator,
+	tracking_allocator: mem.Tracking_Allocator,
+	old_game_apis:      [dynamic]Game_API,
 }
 
 load_game_api :: proc(api_version: int) -> (api: Game_API, ok: bool) {
@@ -95,33 +100,112 @@ unload_game_api :: proc(api: ^Game_API) {
 }
 
 init :: proc "c" (userdata: rawptr) {
-    game_api := cast(^Game_API)userdata
-    game_api.init()
+	context = runtime.default_context()
+
+	game_api := cast(^Game_API)userdata
+	game_api.init()
+
+	game_api.default_allocator = context.allocator
+	mem.tracking_allocator_init(&game_api.tracking_allocator, game_api.default_allocator)
+	context.allocator = mem.tracking_allocator(&game_api.tracking_allocator)
+	game_api.old_game_apis = make([dynamic]Game_API, context.allocator)
 }
 
 update :: proc "c" (userdata: rawptr) {
-    game_api := cast(^Game_API)userdata
-    game_api.update()
+	context = runtime.default_context()
+
+	game_api := cast(^Game_API)userdata
+	game_api.update()
+
+	game_dll_mod, game_dll_mod_err := os.last_write_time_by_name("game" + DLL_EXT)
+
+	force_reload := game_api.force_reload()
+	force_restart := game_api.force_restart()
+	reload := force_reload || force_restart
+	if game_dll_mod_err == os.ERROR_NONE && game_api.modification_time != game_dll_mod {
+		reload = true
+	}
+
+	if reload {
+		new_game_api, new_game_api_ok := load_game_api(game_api.api_version + 1)
+		if new_game_api_ok {
+			force_restart = force_restart || game_api.memory_size() != new_game_api.memory_size()
+			if !force_restart {
+				append(&game_api.old_game_apis, game_api^)
+				game_memory := game_api.memory()
+				game_api^ = new_game_api
+				game_api.hot_reloaded(game_memory)
+			} else {
+				game_api.shutdown()
+				reset_tracking_allocator(&game_api.tracking_allocator)
+
+				for &g in game_api.old_game_apis {
+					unload_game_api(&g)
+				}
+
+				clear(&game_api.old_game_apis)
+				unload_game_api(game_api)
+				new_game_api.default_allocator = game_api.default_allocator
+				new_game_api.tracking_allocator = game_api.tracking_allocator
+				game_api = &new_game_api
+				game_api.init()
+			}
+		}
+	}
+
+	if len(game_api.tracking_allocator.bad_free_array) > 0 {
+		// for b in game_api.tracking_allocator.bad_free_array {
+		// 	log.errorf("Bad free at: %v", b.location)
+		// }
+	}
+
+	free_all(context.temp_allocator)
 }
 
 shutdown :: proc "c" (userdata: rawptr) {
-    game_api := cast(^Game_API)userdata
-    game_api.shutdown()
+	context = runtime.default_context()
+
+	free_all(context.temp_allocator)
+
+	game_api := cast(^Game_API)userdata
+	game_api.shutdown()
+
+	reset_tracking_allocator(&game_api.tracking_allocator)
+
+	for &g in game_api.old_game_apis {
+		unload_game_api(&g)
+	}
+
+	delete(game_api.old_game_apis)
+
+	unload_game_api(game_api)
+	mem.tracking_allocator_destroy(&game_api.tracking_allocator)
+}
+
+reset_tracking_allocator :: proc(a: ^mem.Tracking_Allocator) -> bool {
+	err := false
+
+	for _, value in a.allocation_map {
+		fmt.printf("%v: Leaked %v bytes\n", value.location, value.size)
+		err = true
+	}
+
+	mem.tracking_allocator_clear(a)
+	return err
 }
 
 main :: proc() {
-   	game_api_version := 0
-	game_api, game_api_ok := load_game_api(game_api_version)
+	game_api, game_api_ok := load_game_api(0)
 
 	if !game_api_ok {
 		fmt.println("Failed to load Game API")
 		return
 	}
 
-    sapp.run(
+	sapp.run(
 		{
-		      user_data = &game_api,
-		    init_userdata_cb = init,
+			user_data = &game_api,
+			init_userdata_cb = init,
 			frame_userdata_cb = update,
 			cleanup_userdata_cb = shutdown,
 			width = 1280,
