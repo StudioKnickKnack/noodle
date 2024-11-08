@@ -42,19 +42,19 @@ case $(uname) in
     ;;
 esac
 
-# Build the game.
-echo "Building game$DLL_EXT"
-odin build game -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -define:RAYLIB_SHARED=true -build-mode:dll -out:game_tmp$DLL_EXT -strict-style -vet -debug
+# Build the app.
+echo "Building app$DLL_EXT"
+odin build app -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -define:RAYLIB_SHARED=true -build-mode:dll -out:app_tmp$DLL_EXT -strict-style -vet -debug
 
-# Need to use a temp file on Linux because it first writes an empty `game.so`, which the game will load before it is actually fully written.
-mv game_tmp$DLL_EXT game$DLL_EXT
+# Need to use a temp file on Linux because it first writes an empty `app.so`, which the app will load before it is actually fully written.
+mv app_tmp$DLL_EXT app$DLL_EXT
 
-# Do not build the game_hot_reload.bin if it is already running.
+# Do not build the app_hot_reload.bin if it is already running.
 # -f is there to make sure we match against full name, including .bin
-if pgrep -f game_hot_reload.bin > /dev/null; then
-    echo "Game running, hot reloading..."
+if pgrep -f app_hot_reload.bin > /dev/null; then
+    echo "App running, hot reloading..."
     exit 1
 else
-    echo "Building game_hot_reload.bin"
-    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:game_hot_reload.bin -strict-style -vet -debug
+    echo "Building app_hot_reload.bin"
+    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:app_hot_reload.bin -strict-style -vet -debug
 fi

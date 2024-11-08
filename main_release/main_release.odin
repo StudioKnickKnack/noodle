@@ -5,14 +5,14 @@ package main_release
 import sapp "../sokol/app"
 import slog "../sokol/log"
 
-import game "../game"
+import app "../app"
 
 main :: proc() {
 	sapp.run(
 		{
-			init_cb = game.game_init,
-			frame_cb = game.game_update,
-			cleanup_cb = game.game_shutdown,
+			init_cb = app.app_init,
+			frame_cb = app.app_update,
+			cleanup_cb = app.app_shutdown,
 			width = 1280,
 			height = 720,
 			window_title = "Odin + Sokol",
@@ -22,11 +22,11 @@ main :: proc() {
 	)
 
 	// todo
-	// - put tracking allocator checks into game_shutdown
-	// - put logger shutdown into game shutdown
+	// - put tracking allocator checks into app_shutdown
+	// - put logger shutdown into app shutdown
 }
 
-// make game use good GPU on laptops etc
+// make app use good GPU on laptops etc
 
 @(export)
 NvOptimusEnablement: u32 = 1

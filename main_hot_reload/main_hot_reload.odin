@@ -1,4 +1,4 @@
-// Development game exe. Loads game.dll and reloads it whenever it changes.
+// Development app exe. Loads app.dll and reloads it whenever it changes.
 
 package main
 
@@ -24,20 +24,20 @@ when ODIN_OS == .Windows {
 copy_dll :: proc(to: string) -> bool {
 	exit: i32
 	when ODIN_OS == .Windows {
-		exit = libc.system(fmt.ctprintf("copy game.dll {0}", to))
+		exit = libc.system(fmt.ctprintf("copy app.dll {0}", to))
 	} else {
-		exit = libc.system(fmt.ctprintf("cp game" + DLL_EXT + " {0}", to))
+		exit = libc.system(fmt.ctprintf("cp app" + DLL_EXT + " {0}", to))
 	}
 
 	if exit != 0 {
-		fmt.printfln("Failed to copy game" + DLL_EXT + " to {0}", to)
+		fmt.printfln("Failed to copy app" + DLL_EXT + " to {0}", to)
 		return false
 	}
 
 	return true
 }
 
-Game_API :: struct {
+App_API :: struct {
 	lib:                dynlib.Library,
 	init:               proc "c" (),
 	update:             proc "c" (),
@@ -51,31 +51,31 @@ Game_API :: struct {
 	api_version:        int,
 	default_allocator:  mem.Allocator,
 	tracking_allocator: mem.Tracking_Allocator,
-	old_game_apis:      [dynamic]Game_API,
+	old_app_apis:       [dynamic]App_API,
 }
 
-load_game_api :: proc(api_version: int) -> (api: Game_API, ok: bool) {
-	mod_time, mod_time_error := os.last_write_time_by_name("game" + DLL_EXT)
+load_app_api :: proc(api_version: int) -> (api: App_API, ok: bool) {
+	mod_time, mod_time_error := os.last_write_time_by_name("app" + DLL_EXT)
 	if mod_time_error != os.ERROR_NONE {
 		fmt.printfln(
-			"Failed getting last write time of game" + DLL_EXT + ", error code: {1}",
+			"Failed getting last write time of app" + DLL_EXT + ", error code: {1}",
 			mod_time_error,
 		)
 		return
 	}
 
 	// NOTE: this needs to be a relative path for Linux to work.
-	game_dll_name := fmt.tprintf(
-		"{0}game_{1}" + DLL_EXT,
+	app_dll_name := fmt.tprintf(
+		"{0}app_{1}" + DLL_EXT,
 		"./" when ODIN_OS != .Windows else "",
 		api_version,
 	)
-	copy_dll(game_dll_name) or_return
+	copy_dll(app_dll_name) or_return
 
-	// This proc matches the names of the fields in Game_API to symbols in the
-	// game DLL. It actually looks for symbols starting with `game_`, which is
-	// why the argument `"game_"` is there.
-	_, ok = dynlib.initialize_symbols(&api, game_dll_name, "game_", "lib")
+	// This proc matches the names of the fields in App_API to symbols in the
+	// app DLL. It actually looks for symbols starting with `app_`, which is
+	// why the argument `"app_"` is there.
+	_, ok = dynlib.initialize_symbols(&api, app_dll_name, "app_", "lib")
 	if !ok {
 		fmt.printfln("Failed initializing symbols: {0}", dynlib.last_error())
 	}
@@ -87,74 +87,74 @@ load_game_api :: proc(api_version: int) -> (api: Game_API, ok: bool) {
 	return
 }
 
-unload_game_api :: proc(api: ^Game_API) {
+unload_app_api :: proc(api: ^App_API) {
 	if api.lib != nil {
 		if !dynlib.unload_library(api.lib) {
 			fmt.printfln("Failed unloading lib: {0}", dynlib.last_error())
 		}
 	}
 
-	if os.remove(fmt.tprintf("game_{0}" + DLL_EXT, api.api_version)) != nil {
-		fmt.printfln("Failed to remove game_{0}" + DLL_EXT + " copy", api.api_version)
+	if os.remove(fmt.tprintf("app_{0}" + DLL_EXT, api.api_version)) != nil {
+		fmt.printfln("Failed to remove app_{0}" + DLL_EXT + " copy", api.api_version)
 	}
 }
 
 init :: proc "c" (userdata: rawptr) {
 	context = runtime.default_context()
 
-	game_api := cast(^Game_API)userdata
-	game_api.init()
+	app_api := cast(^App_API)userdata
+	app_api.init()
 
-	game_api.default_allocator = context.allocator
-	mem.tracking_allocator_init(&game_api.tracking_allocator, game_api.default_allocator)
-	context.allocator = mem.tracking_allocator(&game_api.tracking_allocator)
-	game_api.old_game_apis = make([dynamic]Game_API, context.allocator)
+	app_api.default_allocator = context.allocator
+	mem.tracking_allocator_init(&app_api.tracking_allocator, app_api.default_allocator)
+	context.allocator = mem.tracking_allocator(&app_api.tracking_allocator)
+	app_api.old_app_apis = make([dynamic]App_API, context.allocator)
 }
 
 update :: proc "c" (userdata: rawptr) {
 	context = runtime.default_context()
 
-	game_api := cast(^Game_API)userdata
-	game_api.update()
+	app_api := cast(^App_API)userdata
+	app_api.update()
 
-	game_dll_mod, game_dll_mod_err := os.last_write_time_by_name("game" + DLL_EXT)
+	app_dll_mod, app_dll_mod_err := os.last_write_time_by_name("app" + DLL_EXT)
 
-	force_reload := game_api.force_reload()
-	force_restart := game_api.force_restart()
+	force_reload := app_api.force_reload()
+	force_restart := app_api.force_restart()
 	reload := force_reload || force_restart
-	if game_dll_mod_err == os.ERROR_NONE && game_api.modification_time != game_dll_mod {
+	if app_dll_mod_err == os.ERROR_NONE && app_api.modification_time != app_dll_mod {
 		reload = true
 	}
 
 	if reload {
-		new_game_api, new_game_api_ok := load_game_api(game_api.api_version + 1)
-		if new_game_api_ok {
-			force_restart = force_restart || game_api.memory_size() != new_game_api.memory_size()
+		new_app_api, new_app_api_ok := load_app_api(app_api.api_version + 1)
+		if new_app_api_ok {
+			force_restart = force_restart || app_api.memory_size() != new_app_api.memory_size()
 			if !force_restart {
-				append(&game_api.old_game_apis, game_api^)
-				game_memory := game_api.memory()
-				game_api^ = new_game_api
-				game_api.hot_reloaded(game_memory)
+				append(&app_api.old_app_apis, app_api^)
+				app_memory := app_api.memory()
+				app_api^ = new_app_api
+				app_api.hot_reloaded(app_memory)
 			} else {
-				game_api.shutdown()
-				reset_tracking_allocator(&game_api.tracking_allocator)
+				app_api.shutdown()
+				reset_tracking_allocator(&app_api.tracking_allocator)
 
-				for &g in game_api.old_game_apis {
-					unload_game_api(&g)
+				for &g in app_api.old_app_apis {
+					unload_app_api(&g)
 				}
 
-				clear(&game_api.old_game_apis)
-				unload_game_api(game_api)
-				new_game_api.default_allocator = game_api.default_allocator
-				new_game_api.tracking_allocator = game_api.tracking_allocator
-				game_api = &new_game_api
-				game_api.init()
+				clear(&app_api.old_app_apis)
+				unload_app_api(app_api)
+				new_app_api.default_allocator = app_api.default_allocator
+				new_app_api.tracking_allocator = app_api.tracking_allocator
+				app_api = &new_app_api
+				app_api.init()
 			}
 		}
 	}
 
-	if len(game_api.tracking_allocator.bad_free_array) > 0 {
-		// for b in game_api.tracking_allocator.bad_free_array {
+	if len(app_api.tracking_allocator.bad_free_array) > 0 {
+		// for b in app_api.tracking_allocator.bad_free_array {
 		// 	log.errorf("Bad free at: %v", b.location)
 		// }
 	}
@@ -167,19 +167,19 @@ shutdown :: proc "c" (userdata: rawptr) {
 
 	free_all(context.temp_allocator)
 
-	game_api := cast(^Game_API)userdata
-	game_api.shutdown()
+	app_api := cast(^App_API)userdata
+	app_api.shutdown()
 
-	reset_tracking_allocator(&game_api.tracking_allocator)
+	reset_tracking_allocator(&app_api.tracking_allocator)
 
-	for &g in game_api.old_game_apis {
-		unload_game_api(&g)
+	for &g in app_api.old_app_apis {
+		unload_app_api(&g)
 	}
 
-	delete(game_api.old_game_apis)
+	delete(app_api.old_app_apis)
 
-	unload_game_api(game_api)
-	mem.tracking_allocator_destroy(&game_api.tracking_allocator)
+	unload_app_api(app_api)
+	mem.tracking_allocator_destroy(&app_api.tracking_allocator)
 }
 
 reset_tracking_allocator :: proc(a: ^mem.Tracking_Allocator) -> bool {
@@ -195,16 +195,16 @@ reset_tracking_allocator :: proc(a: ^mem.Tracking_Allocator) -> bool {
 }
 
 main :: proc() {
-	game_api, game_api_ok := load_game_api(0)
+	app_api, app_api_ok := load_app_api(0)
 
-	if !game_api_ok {
-		fmt.println("Failed to load Game API")
+	if !app_api_ok {
+		fmt.println("Failed to load App API")
 		return
 	}
 
 	sapp.run(
 		{
-			user_data = &game_api,
+			user_data = &app_api,
 			init_userdata_cb = init,
 			frame_userdata_cb = update,
 			cleanup_userdata_cb = shutdown,
@@ -215,83 +215,9 @@ main :: proc() {
 			logger = {func = slog.func},
 		},
 	)
-
-	// todo
-	// - free temp allocator, from update?
-	// - force reload
-	// - force restart
-	// - reload loop
-
-	/*
-		force_reload := game_api.force_reload()
-		force_restart := game_api.force_restart()
-		reload := force_reload || force_restart
-		game_dll_mod, game_dll_mod_err := os.last_write_time_by_name("game" + DLL_EXT)
-
-		if game_dll_mod_err == os.ERROR_NONE && game_api.modification_time != game_dll_mod {
-			reload = true
-		}
-
-		if reload {
-			new_game_api, new_game_api_ok := load_game_api(game_api_version)
-
-			if new_game_api_ok {
-				force_restart =
-					force_restart || game_api.memory_size() != new_game_api.memory_size()
-
-				if !force_restart {
-					// This does the normal hot reload
-
-					// Note that we don't unload the old game APIs because that
-					// would unload the DLL. The DLL can contain stored info
-					// such as string literals. The old DLLs are only unloaded
-					// on a full reset or on shutdown.
-					append(&old_game_apis, game_api)
-					game_memory := game_api.memory()
-					game_api = new_game_api
-					game_api.hot_reloaded(game_memory)
-				} else {
-					// This does a full reset. That's basically like opening and
-					// closing the game, without having to restart the executable.
-					//
-					// You end up in here if the game requests a full reset OR
-					// if the size of the game memory has changed. That would
-					// probably lead to a crash anyways.
-
-					game_api.shutdown()
-					reset_tracking_allocator(&tracking_allocator)
-
-					for &g in old_game_apis {
-						unload_game_api(&g)
-					}
-
-					clear(&old_game_apis)
-					unload_game_api(&game_api)
-					game_api = new_game_api
-					game_api.init()
-				}
-
-				game_api_version += 1
-			}
-		}
-
-		if len(tracking_allocator.bad_free_array) > 0 {
-			for b in tracking_allocator.bad_free_array {
-				log.errorf("Bad free at: %v", b.location)
-			}
-
-			// This prevents the game from closing without you seeing the bad
-			// frees. This is mostly needed because I use Sublime Text and my game's
-			// console isn't hooked up into Sublime's console properly.
-			libc.getchar()
-			panic("Bad free detected")
-		}
-
-		free_all(context.temp_allocator)
-	}*/
 }
 
-// Make game use good GPU on laptops.
+// Make app use good GPU on laptops.
 
 @(export)
 NvOptimusEnablement: u32 = 1
