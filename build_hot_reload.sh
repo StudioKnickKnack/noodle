@@ -51,7 +51,7 @@ mv app_tmp$DLL_EXT app$DLL_EXT
 
 # Do not build the app_hot_reload.bin if it is already running.
 # -f is there to make sure we match against full name, including .bin
-if pgrep -f app_hot_reload.bin > /dev/null; then
+if pgrep -fl 'app_hot_reload.bin' | grep -v 'lldb' > /dev/null; then
     echo "App running, hot reloading..."
     exit 1
 else
