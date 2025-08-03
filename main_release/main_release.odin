@@ -13,6 +13,7 @@ main :: proc() {
 			init_cb = app.app_init,
 			frame_cb = app.app_update,
 			cleanup_cb = app.app_shutdown,
+			event_cb = app.app_event,
 			width = 1280,
 			height = 720,
 			window_title = "Odin + Sokol",

@@ -15,11 +15,15 @@
 package app
 
 //import "core:math/linalg"
+import im "../imgui"
+import "../imgui/imgui_impl_metal"
+import mtl "vendor:darwin/Metal"
+//import "../imgui/imgui_impl_sokol"
 import sg "../sokol/gfx"
+import sapp "../sokol/app"
 import sglue "../sokol/glue"
 import slog "../sokol/log"
 import "base:runtime"
-import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
 
@@ -29,6 +33,18 @@ App_Memory :: struct {
 }
 
 g_mem: ^App_Memory
+
+g_force_reset: bool
+
+@export
+app_event :: proc(e: ^sapp.Event) {
+	#partial switch e.type {
+	case .KEY_DOWN:
+		if e.key_code == .F6 {
+			g_force_reset = true
+		}
+	}
+}
 
 update :: proc() {
 	/*input: rl.Vector2
@@ -70,10 +86,10 @@ app_update :: proc() {
 
 @(export)
 app_init_window :: proc() {
-	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
+	/*rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(1280, 720, "Odin + Raylib + Hot Reload template!")
 	rl.SetWindowPosition(200, 200)
-	rl.SetTargetFPS(500)
+	rl.SetTargetFPS(500)*/
 }
 
 @(export)
@@ -81,6 +97,21 @@ app_init :: proc "c" () {
 	context = runtime.default_context()
 
 	sg.setup({environment = sglue.environment(), logger = {func = slog.func}})
+
+	im.CHECKVERSION()
+	im.CreateContext()
+	defer im.DestroyContext()
+	io := im.GetIO()
+	io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad, .DockingEnable, .ViewportsEnable}
+	style := im.GetStyle()
+	style.WindowRounding = 0
+	style.Colors[im.Col.WindowBg].w = 1
+	im.StyleColorsDark()
+
+	device := (^mtl.Device)(sg.mtl_device())
+
+	imgui_impl_metal.Init(device)
+	defer imgui_impl_metal.Shutdown()
 
 	g_mem = new(App_Memory)
 	g_mem^ = App_Memory {
@@ -103,7 +134,7 @@ app_shutdown :: proc "c" () {
 
 @(export)
 app_shutdown_window :: proc() {
-	rl.CloseWindow()
+	//rl.CloseWindow()
 }
 
 @(export)
@@ -122,11 +153,6 @@ app_hot_reloaded :: proc(mem: rawptr) {
 }
 
 @(export)
-app_force_reload :: proc() -> bool {
-	return rl.IsKeyPressed(.F5)
-}
-
-@(export)
 app_force_restart :: proc() -> bool {
-	return rl.IsKeyPressed(.F6)
+	return g_force_reset
 }

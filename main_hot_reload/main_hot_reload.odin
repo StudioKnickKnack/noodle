@@ -41,11 +41,11 @@ App_API :: struct {
 	lib:                dynlib.Library,
 	init:               proc "c" (),
 	update:             proc "c" (),
+	event: 				proc "c" (^sapp.Event),
 	shutdown:           proc "c" (),
 	memory:             proc() -> rawptr,
 	memory_size:        proc() -> int,
 	hot_reloaded:       proc(mem: rawptr),
-	force_reload:       proc() -> bool,
 	force_restart:      proc() -> bool,
 	modification_time:  os.File_Time,
 	api_version:        int,
@@ -119,9 +119,11 @@ update :: proc "c" (userdata: rawptr) {
 
 	app_dll_mod, app_dll_mod_err := os.last_write_time_by_name("app" + DLL_EXT)
 
-	force_reload := app_api.force_reload()
 	force_restart := app_api.force_restart()
-	reload := force_reload || force_restart
+	if force_restart {
+		fmt.printfln("Force restart: {0}", force_restart)
+	}
+	reload := force_restart
 	if app_dll_mod_err == os.ERROR_NONE && app_api.modification_time != app_dll_mod {
 		reload = true
 	}
@@ -160,6 +162,13 @@ update :: proc "c" (userdata: rawptr) {
 	}
 
 	free_all(context.temp_allocator)
+}
+
+event :: proc "c" (e: ^sapp.Event, userdata: rawptr) {
+	context = runtime.default_context()
+
+	app_api := cast(^App_API)userdata
+	app_api.event(e)
 }
 
 shutdown :: proc "c" (userdata: rawptr) {
@@ -208,6 +217,7 @@ main :: proc() {
 			init_userdata_cb = init,
 			frame_userdata_cb = update,
 			cleanup_userdata_cb = shutdown,
+			event_userdata_cb = event,
 			width = 1280,
 			height = 720,
 			window_title = "Odin + Sokol",
