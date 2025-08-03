@@ -41,7 +41,7 @@ App_API :: struct {
 	lib:                dynlib.Library,
 	init:               proc "c" (),
 	update:             proc "c" (),
-	event: 				proc "c" (^sapp.Event),
+	event:              proc "c" (^sapp.Event),
 	shutdown:           proc "c" (),
 	memory:             proc() -> rawptr,
 	memory_size:        proc() -> int,
