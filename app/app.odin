@@ -19,8 +19,8 @@ import im "../imgui"
 import "../imgui/imgui_impl_metal"
 import mtl "vendor:darwin/Metal"
 //import "../imgui/imgui_impl_sokol"
-import sg "../sokol/gfx"
 import sapp "../sokol/app"
+import sg "../sokol/gfx"
 import sglue "../sokol/glue"
 import slog "../sokol/log"
 import "base:runtime"
@@ -36,8 +36,8 @@ g_mem: ^App_Memory
 
 g_force_reset: bool
 
-@export
-app_event :: proc(e: ^sapp.Event) {
+@(export)
+app_event :: proc "c" (e: ^sapp.Event) {
 	#partial switch e.type {
 	case .KEY_DOWN:
 		if e.key_code == .F6 {
@@ -66,8 +66,8 @@ update :: proc() {
 	g_mem.player_pos += input * rl.GetFrameTime() * 100*/
 	g_mem.some_number += 1
 
-	g := g_mem.pass_action.colors[0].clear_value.g - 0.001
-	g_mem.pass_action.colors[0].clear_value.g = g < 0.0 ? 1.0 : g
+	b := g_mem.pass_action.colors[0].clear_value.b - 0.01
+	g_mem.pass_action.colors[0].clear_value.b = b < 0.0 ? 1.0 : b
 }
 
 draw :: proc() {
@@ -78,7 +78,8 @@ draw :: proc() {
 }
 
 @(export)
-app_update :: proc() {
+app_update :: proc "c" () {
+	context = runtime.default_context()
 	update()
 	draw()
 	//return !rl.WindowShouldClose()
@@ -156,3 +157,4 @@ app_hot_reloaded :: proc(mem: rawptr) {
 app_force_restart :: proc() -> bool {
 	return g_force_reset
 }
+
