@@ -14,6 +14,9 @@
 
 package app
 
+import "../framework/property"
+import "core:log"
+import "data"
 //import "core:math/linalg"
 import im "../imgui"
 import "../imgui/imgui_impl_metal"
@@ -27,13 +30,8 @@ import "base:runtime"
 
 PIXEL_WINDOW_HEIGHT :: 180
 
-App_Memory :: struct {
-	some_number: int,
-	pass_action: sg.Pass_Action,
-}
-
-g_mem: ^App_Memory
-
+g_context: runtime.Context
+g_mem: ^data.App
 g_force_reset: bool
 
 @(export)
@@ -66,8 +64,24 @@ update :: proc() {
 	g_mem.player_pos += input * rl.GetFrameTime() * 100*/
 	g_mem.some_number += 1
 
+	if g_mem.some_number % 100 == 0 {
+		if g_mem.some_number % 200 == 0 && g_mem.sub.gen != 0 {
+			log.info("--- OFF ---")
+			property.unsubscribe(&g_mem.reactive_number, g_mem.sub)
+			g_mem.sub.gen = 0
+		} else if g_mem.sub.gen == 0 {
+			log.info("--- ON ---")
+			g_mem.sub = property.subscribe(&g_mem.reactive_number, proc(v: f32) {
+				log.infof("reactive num: %f", v)
+			})
+		}
+	}
+
 	b := g_mem.pass_action.colors[0].clear_value.b - 0.01
 	g_mem.pass_action.colors[0].clear_value.b = b < 0.0 ? 1.0 : b
+
+	property.set(&g_mem.reactive_number, (g_mem.reactive_number.value + 0.4))
+	//log.info(g_mem.reactive_number.value)
 }
 
 draw :: proc() {
@@ -79,7 +93,7 @@ draw :: proc() {
 
 @(export)
 app_update :: proc "c" () {
-	context = runtime.default_context()
+	context = g_context
 	update()
 	draw()
 	//return !rl.WindowShouldClose()
@@ -95,7 +109,11 @@ app_init_window :: proc() {
 
 @(export)
 app_init :: proc "c" () {
-	context = runtime.default_context()
+	g_context = runtime.default_context()
+	context = g_context
+	g_context.logger = log.create_console_logger()
+	log.info("this is info")
+	log.error("this is error")
 
 	sg.setup({environment = sglue.environment(), logger = {func = slog.func}})
 
@@ -114,9 +132,10 @@ app_init :: proc "c" () {
 	imgui_impl_metal.Init(device)
 	defer imgui_impl_metal.Shutdown()
 
-	g_mem = new(App_Memory)
-	g_mem^ = App_Memory {
-		some_number = 100,
+	g_mem = new(data.App)
+	g_mem^ = data.App {
+		some_number     = 100,
+		reactive_number = property.make(f32, 3.14),
 	}
 	g_mem.pass_action.colors[0] = {
 		load_action = .CLEAR,
@@ -128,7 +147,8 @@ app_init :: proc "c" () {
 
 @(export)
 app_shutdown :: proc "c" () {
-	context = runtime.default_context()
+	context = g_context
+	log.destroy_console_logger(context.logger)
 	sg.shutdown()
 	free(g_mem)
 }
@@ -145,12 +165,12 @@ app_memory :: proc() -> rawptr {
 
 @(export)
 app_memory_size :: proc() -> int {
-	return size_of(App_Memory)
+	return size_of(data.App)
 }
 
 @(export)
 app_hot_reloaded :: proc(mem: rawptr) {
-	g_mem = (^App_Memory)(mem)
+	g_mem = (^data.App)(mem)
 }
 
 @(export)
