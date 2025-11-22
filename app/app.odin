@@ -17,6 +17,7 @@ package app
 import "../framework/property"
 import "core:log"
 import "data"
+import "sim"
 //import "core:math/linalg"
 import im "../imgui"
 import "../imgui/imgui_impl_metal"
@@ -141,6 +142,10 @@ app_init :: proc "c" () {
 		load_action = .CLEAR,
 		clear_value = {1.0, 0.0, 0.0, 1.0},
 	}
+
+	counter := sim.app_new_model(g_mem, data.Counter)
+	sim.app_delete_model(g_mem, counter)
+	sim.app_delete_model(g_mem, counter)
 
 	app_hot_reloaded(g_mem)
 }

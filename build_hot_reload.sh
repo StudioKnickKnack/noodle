@@ -44,7 +44,7 @@ esac
 
 # Build the app.
 echo "Building app$DLL_EXT"
-odin build app -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -define:RAYLIB_SHARED=true -build-mode:dll -out:app_tmp$DLL_EXT -strict-style -vet -debug
+odin build app -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -build-mode:dll -out:app_tmp$DLL_EXT -strict-style -vet -debug
 
 # Need to use a temp file on Linux because it first writes an empty `app.so`, which the app will load before it is actually fully written.
 mv app_tmp$DLL_EXT app$DLL_EXT
