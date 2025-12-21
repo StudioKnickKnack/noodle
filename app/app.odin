@@ -14,7 +14,6 @@
 
 package app
 
-import "../framework/property"
 import "core:log"
 import "data"
 import "sim"
@@ -66,14 +65,13 @@ update :: proc() {
 	g_mem.some_number += 1
 
 	if g_mem.some_number % 100 == 0 {
-		if g_mem.some_number % 200 == 0 && g_mem.sub.gen != 0 {
+		if g_mem.some_number % 200 == 0 {
 			log.info("--- OFF ---")
-			property.unsubscribe(&g_mem.reactive_number, g_mem.sub)
-			g_mem.sub.gen = 0
-		} else if g_mem.sub.gen == 0 {
+		} else{
 			log.info("--- ON ---")
-			g_mem.sub = property.subscribe(&g_mem.reactive_number, proc(v: f32) {
-				log.infof("reactive num: %f", v)
+			sim.model_observe(g_mem.counter_dbl, g_mem.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
+				observer.value = observed.value * 2 // should be good
+				sim.model_notify(mdl)
 			})
 		}
 	}
@@ -81,8 +79,10 @@ update :: proc() {
 	b := g_mem.pass_action.colors[0].clear_value.b - 0.01
 	g_mem.pass_action.colors[0].clear_value.b = b < 0.0 ? 1.0 : b
 
-	property.set(&g_mem.reactive_number, (g_mem.reactive_number.value + 0.4))
-	//log.info(g_mem.reactive_number.value)
+	sim.model_update(g_mem.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
+		c.value += 1
+		sim.model_notify(mdl)
+	})
 }
 
 draw :: proc() {
@@ -135,17 +135,18 @@ app_init :: proc "c" () {
 
 	g_mem = new(data.App)
 	g_mem^ = data.App {
-		some_number     = 100,
-		reactive_number = property.make(f32, 3.14),
+		some_number = 100,
 	}
 	g_mem.pass_action.colors[0] = {
 		load_action = .CLEAR,
 		clear_value = {1.0, 0.0, 0.0, 1.0},
 	}
 
-	counter := sim.app_new_model(g_mem, data.Counter)
-	sim.app_delete_model(g_mem, counter)
-	sim.app_delete_model(g_mem, counter)
+	g_mem.counter = sim.app_new_model(g_mem, data.Counter)
+	g_mem.counter_dbl = sim.app_new_model(g_mem, data.Counter)
+	sim.model_observe(g_mem.counter_dbl, proc(c: data.Counter) {
+		log.infof("dbl counter is now: %v", c.value)
+	})
 
 	app_hot_reloaded(g_mem)
 }
@@ -155,6 +156,9 @@ app_shutdown :: proc "c" () {
 	context = g_context
 	log.destroy_console_logger(context.logger)
 	sg.shutdown()
+
+	sim.app_delete_model(g_mem, g_mem.counter)
+	sim.app_delete_model(g_mem, g_mem.counter_dbl)
 	free(g_mem)
 }
 

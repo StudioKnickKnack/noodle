@@ -1,6 +1,5 @@
 package data
 
-import "../../framework/property"
 import sg "../../sokol/gfx"
 
 App :: struct {
@@ -8,9 +7,12 @@ App :: struct {
 	models_ptr: [dynamic]rawptr,
 	models_freelist: [dynamic]u32,
 
+	observer_roots: [dynamic]^Subscription,
+	
 	some_number:     int,
-	reactive_number: property.Property(f32),
-	sub:             property.Subscription,
 	pass_action:     sg.Pass_Action,
+
+	counter: Model(Counter),
+	counter_dbl: Model(Counter),
 }
 
