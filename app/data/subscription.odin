@@ -27,6 +27,5 @@ Subscription_Context :: struct($TObserver: typeid, $TObserved: typeid) {
 	observer_gen: u32,
 	observed_idx: u32,
 	observed_gen: u32,
-	//handler: proc(^TObserver, TObserved),
 	handler: Subscription_Handler(TObserver, TObserved),
 }

@@ -76,8 +76,8 @@ update :: proc() {
 		}
 	}
 
-	b := g_mem.pass_action.colors[0].clear_value.b - 0.01
-	g_mem.pass_action.colors[0].clear_value.b = b < 0.0 ? 1.0 : b
+	g := g_mem.clear_color[1] - 0.01
+	g_mem.clear_color[1] = g < 0.0 ? 1.0 : g
 
 	sim.model_update(g_mem.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
 		c.value += 1
@@ -87,7 +87,12 @@ update :: proc() {
 
 draw :: proc() {
 
-	sg.begin_pass({action = g_mem.pass_action, swapchain = sglue.swapchain()})
+	action := sg.Pass_Action {}
+	action.colors[0] = {
+		load_action = .CLEAR,
+		clear_value = {g_mem.clear_color[0], g_mem.clear_color[1], g_mem.clear_color[2], g_mem.clear_color[3]},
+	}
+	sg.begin_pass({action = action, swapchain = sglue.swapchain()})
 	sg.end_pass()
 	sg.commit()
 }
@@ -136,10 +141,7 @@ app_init :: proc "c" () {
 	g_mem = new(data.App)
 	g_mem^ = data.App {
 		some_number = 100,
-	}
-	g_mem.pass_action.colors[0] = {
-		load_action = .CLEAR,
-		clear_value = {1.0, 0.0, 0.0, 1.0},
+		clear_color = {0.0, 0.0, 1.0, 1.0},
 	}
 
 	g_mem.counter = sim.app_new_model(g_mem, data.Counter)

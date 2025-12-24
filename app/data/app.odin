@@ -1,7 +1,5 @@
 package data
 
-import sg "../../sokol/gfx"
-
 App :: struct {
 	models_gen: [dynamic]u32,
 	models_ptr: [dynamic]rawptr,
@@ -9,8 +7,8 @@ App :: struct {
 
 	observer_roots: [dynamic]^Subscription,
 	
-	some_number:     int,
-	pass_action:     sg.Pass_Action,
+	some_number: int,
+	clear_color: [4]f32,
 
 	counter: Model(Counter),
 	counter_dbl: Model(Counter),

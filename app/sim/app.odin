@@ -3,7 +3,7 @@ package sim
 import "../data"
 
 app_new_model :: proc(a: ^data.App, $T: typeid) -> data.Model(T) {
-	m := data.Model(T){ _app = a }
+	m := data.Model(T){ app = a }
 	ptr := new(T)
 	if len(a.models_freelist) > 0 {
 		m.idx = pop(&a.models_freelist)
