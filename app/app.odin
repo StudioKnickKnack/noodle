@@ -6,7 +6,7 @@
 // app_shutdown: Shuts down app and frees memory
 // app_memory: Run just before a hot reload, so app.exe has a pointer to the
 //		app's memory.
-// app_hot_reloaded: Run after a hot reload so that the `g_mem` global variable
+// app_hot_reloaded: Run after a hot reload so that the `g_app` global variable
 //		can be set to whatever pointer it was in the old DLL.
 //
 // Note: When compiled as part of the release executable this whole package is imported as a normal
@@ -31,7 +31,7 @@ import "base:runtime"
 PIXEL_WINDOW_HEIGHT :: 180
 
 g_context: runtime.Context
-g_mem: ^data.App
+g_app: ^data.App
 g_force_reset: bool
 
 @(export)
@@ -61,25 +61,25 @@ update :: proc() {
 	}
 
 	input = linalg.normalize0(input)
-	g_mem.player_pos += input * rl.GetFrameTime() * 100*/
-	g_mem.some_number += 1
+	g_app.player_pos += input * rl.GetFrameTime() * 100*/
+	g_app.some_number += 1
 
-	if g_mem.some_number % 100 == 0 {
-		if g_mem.some_number % 200 == 0 {
+	if g_app.some_number % 100 == 0 {
+		if g_app.some_number % 200 == 0 {
 			log.info("--- OFF ---")
 		} else{
 			log.info("--- ON ---")
-			sim.model_observe(g_mem.counter_dbl, g_mem.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
+			sim.model_observe(g_app.counter_dbl, g_app.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
 				observer.value = observed.value * 2 // should be good
 				sim.model_notify(mdl)
 			})
 		}
 	}
 
-	g := g_mem.clear_color[1] - 0.01
-	g_mem.clear_color[1] = g < 0.0 ? 1.0 : g
+	g := g_app.clear_color[1] - 0.01
+	g_app.clear_color[1] = g < 0.0 ? 1.0 : g
 
-	sim.model_update(g_mem.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
+	sim.model_update(g_app.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
 		c.value += 1
 		sim.model_notify(mdl)
 	})
@@ -90,7 +90,7 @@ draw :: proc() {
 	action := sg.Pass_Action {}
 	action.colors[0] = {
 		load_action = .CLEAR,
-		clear_value = {g_mem.clear_color[0], g_mem.clear_color[1], g_mem.clear_color[2], g_mem.clear_color[3]},
+		clear_value = {g_app.clear_color[0], g_app.clear_color[1], g_app.clear_color[2], g_app.clear_color[3]},
 	}
 	sg.begin_pass({action = action, swapchain = sglue.swapchain()})
 	sg.end_pass()
@@ -138,19 +138,19 @@ app_init :: proc "c" () {
 	imgui_impl_metal.Init(device)
 	defer imgui_impl_metal.Shutdown()
 
-	g_mem = new(data.App)
-	g_mem^ = data.App {
+	g_app = new(data.App)
+	g_app^ = data.App {
 		some_number = 100,
 		clear_color = {0.0, 0.0, 1.0, 1.0},
 	}
 
-	g_mem.counter = sim.app_new_model(g_mem, data.Counter)
-	g_mem.counter_dbl = sim.app_new_model(g_mem, data.Counter)
-	sim.model_observe(g_mem.counter_dbl, proc(c: data.Counter) {
+	g_app.counter = sim.model_new(g_app, data.Counter)
+	g_app.counter_dbl = sim.model_new(g_app, data.Counter)
+	sim.model_observe(g_app.counter_dbl, proc(c: data.Counter) {
 		log.infof("dbl counter is now: %v", c.value)
 	})
 
-	app_hot_reloaded(g_mem)
+	app_hot_reloaded(g_app)
 }
 
 @(export)
@@ -159,9 +159,9 @@ app_shutdown :: proc "c" () {
 	log.destroy_console_logger(context.logger)
 	sg.shutdown()
 
-	sim.app_delete_model(g_mem, g_mem.counter)
-	sim.app_delete_model(g_mem, g_mem.counter_dbl)
-	free(g_mem)
+	sim.model_delete(g_app.counter)
+	sim.model_delete(g_app.counter_dbl)
+	free(g_app)
 }
 
 @(export)
@@ -171,7 +171,7 @@ app_shutdown_window :: proc() {
 
 @(export)
 app_memory :: proc() -> rawptr {
-	return g_mem
+	return g_app
 }
 
 @(export)
@@ -181,7 +181,7 @@ app_memory_size :: proc() -> int {
 
 @(export)
 app_hot_reloaded :: proc(mem: rawptr) {
-	g_mem = (^data.App)(mem)
+	g_app = (^data.App)(mem)
 }
 
 @(export)

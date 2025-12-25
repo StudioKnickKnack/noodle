@@ -3,6 +3,42 @@ package sim
 import "../data"
 import "core:log"
 
+model_new :: proc(a: ^data.App, $T: typeid) -> data.Model(T) {
+	mdl := data.Model(T){ app = a }
+	ptr := new(T)
+	if len(a.models_freelist) > 0 {
+		mdl.idx = pop(&a.models_freelist)
+		mdl.gen = a.models_gen[mdl.idx]
+		a.models_ptr[mdl.idx] = ptr
+		return mdl
+	}
+
+	mdl.idx = u32(len(a.models_ptr))
+	mdl.gen = 1
+	append(&a.models_gen, mdl.gen)
+	append(&a.models_ptr, ptr)
+	append(&a.observer_roots, nil)
+	return mdl
+}
+
+model_delete :: proc(mdl: data.Model($T)) {
+	if int(mdl.idx) >= len(mdl.app.models_ptr) || mdl.gen != mdl.app.models_gen[mdl.idx] {
+		return
+	}
+
+	sub := mdl.app.observer_roots[mdl.idx]
+	for sub != nil {
+		model_unsubscribe(mdl, sub, false)
+		sub = sub.next
+	}
+
+	free(mdl.app.models_ptr[mdl.idx])
+	mdl.app.models_ptr[mdl.idx] = {}
+	mdl.app.models_gen[mdl.idx] += 1
+	mdl.app.observer_roots[mdl.idx] = nil
+	append(&mdl.app.models_freelist, mdl.idx)
+}
+
 model_update :: proc(mdl: data.Model($T), cb: proc(^T, data.Model(T))) {
 	if int(mdl.idx) >= len(mdl.app.models_ptr) || mdl.gen != mdl.app.models_gen[mdl.idx] {
 		return
