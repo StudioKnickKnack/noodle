@@ -31,6 +31,7 @@ State :: struct {
 	font_img:      sg.Image,
 	font_view:     sg.View,
 	font_smp:      sg.Sampler,
+	dock_id:       imgui.ID,
 }
 
 @(private)
@@ -39,7 +40,7 @@ g_state: State
 @(private)
 MAX_VERTICES :: 65536
 
-setup :: proc() {
+setup :: proc(flags: imgui.ConfigFlags = {}) {
 	imgui.CHECKVERSION()
 
 	if (imgui.GetCurrentContext() == nil) {
@@ -47,6 +48,7 @@ setup :: proc() {
 	}
 
 	io := imgui.GetIO()
+	io.ConfigFlags += flags
 	io.BackendFlags += {.RendererHasVtxOffset}
 
 	g_state.vertex_buffer = sg.make_buffer({
@@ -132,6 +134,7 @@ new_frame :: proc(desc: Frame_Desc) {
 	io.DeltaTime = f32(desc.delta_time) if desc.delta_time > 0 else 1.0 / 60.0
 
 	imgui.NewFrame()
+	g_state.dock_id = imgui.DockSpaceOverViewport(0, nil, { .PassthruCentralNode })
 }
 
 render :: proc() {
@@ -213,6 +216,10 @@ render :: proc() {
 	}
 
 	sg.apply_scissor_rect(0, 0, fb_width, fb_height, true)
+}
+
+main_dock_id :: proc() -> imgui.ID {
+	return g_state.dock_id
 }
 
 @(private)

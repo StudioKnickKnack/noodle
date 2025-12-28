@@ -1,17 +1,3 @@
-// This file is compiled as part of the `odin.dll` file. It contains the
-// procs that `app_hot_reload.exe` will call, such as:
-//
-// app_init: Sets up the app state
-// app_update: Run once per frame
-// app_shutdown: Shuts down app and frees memory
-// app_memory: Run just before a hot reload, so app.exe has a pointer to the
-//		app's memory.
-// app_hot_reloaded: Run after a hot reload so that the `g_app` global variable
-//		can be set to whatever pointer it was in the old DLL.
-//
-// Note: When compiled as part of the release executable this whole package is imported as a normal
-// odin package instead of a DLL.
-
 package app
 
 import "core:log"
@@ -19,19 +5,12 @@ import "data"
 import "sim"
 import imgui "../imgui"
 import simgui "../sokol_imgui"
-//import "core:math/linalg"
-// import im "../imgui"
-// import "../imgui/imgui_impl_metal"
-// import mtl "vendor:darwin/Metal"
-//import "../imgui/imgui_impl_sokol"
 import sapp "../sokol/app"
 import sg "../sokol/gfx"
 import sglue "../sokol/glue"
 import slog "../sokol/log"
 import "base:runtime"
 import "core:fmt"
-
-PIXEL_WINDOW_HEIGHT :: 180
 
 g_context: runtime.Context
 g_app: ^data.App
@@ -60,23 +39,6 @@ update :: proc() {
 		dpi_scale = sapp.dpi_scale(),
 	})
 	
-	/*input: rl.Vector2
-
-	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
-		input.y -= 1
-	}
-	if rl.IsKeyDown(.DOWN) || rl.IsKeyDown(.S) {
-		input.y += 1
-	}
-	if rl.IsKeyDown(.LEFT) || rl.IsKeyDown(.A) {
-		input.x -= 1
-	}
-	if rl.IsKeyDown(.RIGHT) || rl.IsKeyDown(.D) {
-		input.x += 1
-	}
-
-	input = linalg.normalize0(input)
-	g_app.player_pos += input * rl.GetFrameTime() * 100*/
 	g_app.some_number += 1
 
 	if g_app.some_number % 100 == 0 {
@@ -87,14 +49,11 @@ update :: proc() {
 			g_app.counter_dbl_sub = nil
 		} else{
 			g_app.counter_dbl_sub = sim.model_observe(g_app.counter_dbl, g_app.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
-				observer.value = observed.value * 2 // should be good
+				observer.value = observed.value * 2
 				sim.model_notify(mdl)
 			})
 		}
 	}
-
-	// g := g_app.clear_color[1] - 0.01
-	// g_app.clear_color[1] = g < 0.0 ? 1.0 : g
 
 	sim.model_update(g_app.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
 		c.value += 1
@@ -106,6 +65,7 @@ draw :: proc() {
 	// show_demo_window := true
 	// imgui.ShowDemoWindow(&show_demo_window)
 
+	imgui.SetNextWindowDockID(simgui.main_dock_id(), .FirstUseEver)
 	imgui.SetNextWindowSize({ 300, 200 })
 	if imgui.Begin("Test") {
 		imgui.Text(g_app.counter_dbl_sub != nil ? "ON" : "OFF")
@@ -137,15 +97,10 @@ app_update :: proc "c" () {
 	context = g_context
 	update()
 	draw()
-	//return !rl.WindowShouldClose()
 }
 
 @(export)
 app_init_window :: proc() {
-	/*rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
-	rl.InitWindow(1280, 720, "Odin + Raylib + Hot Reload template!")
-	rl.SetWindowPosition(200, 200)
-	rl.SetTargetFPS(500)*/
 }
 
 @(export)
@@ -153,13 +108,11 @@ app_init :: proc "c" () {
 	g_context = runtime.default_context()
 	context = g_context
 	g_context.logger = log.create_console_logger()
-	log.info("this is info")
-	log.error("this is error")
 
 	env := sglue.environment()
 	sg.setup({environment = env, logger = {func = slog.func}})
 
-	simgui.setup()
+	simgui.setup({.DockingEnable, .ViewportsEnable})
 	
 	// im.CHECKVERSION()
 	// im.CreateContext()
