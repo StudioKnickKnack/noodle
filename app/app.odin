@@ -17,10 +17,12 @@ package app
 import "core:log"
 import "data"
 import "sim"
+import imgui "../imgui"
+import simgui "../sokol_imgui"
 //import "core:math/linalg"
-import im "../imgui"
-import "../imgui/imgui_impl_metal"
-import mtl "vendor:darwin/Metal"
+// import im "../imgui"
+// import "../imgui/imgui_impl_metal"
+// import mtl "vendor:darwin/Metal"
 //import "../imgui/imgui_impl_sokol"
 import sapp "../sokol/app"
 import sg "../sokol/gfx"
@@ -45,6 +47,13 @@ app_event :: proc "c" (e: ^sapp.Event) {
 }
 
 update :: proc() {
+	simgui.new_frame({
+		width = sapp.width(),
+		height = sapp.height(),
+		delta_time = sapp.frame_duration(),
+		dpi_scale = sapp.dpi_scale(),
+	})
+	
 	/*input: rl.Vector2
 
 	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
@@ -76,8 +85,8 @@ update :: proc() {
 		}
 	}
 
-	g := g_app.clear_color[1] - 0.01
-	g_app.clear_color[1] = g < 0.0 ? 1.0 : g
+	// g := g_app.clear_color[1] - 0.01
+	// g_app.clear_color[1] = g < 0.0 ? 1.0 : g
 
 	sim.model_update(g_app.counter, proc(c: ^data.Counter, mdl: data.Model(data.Counter)) {
 		c.value += 1
@@ -86,13 +95,19 @@ update :: proc() {
 }
 
 draw :: proc() {
+	show_demo_window := true
+	imgui.ShowDemoWindow(&show_demo_window)
 
-	action := sg.Pass_Action {}
-	action.colors[0] = {
-		load_action = .CLEAR,
-		clear_value = {g_app.clear_color[0], g_app.clear_color[1], g_app.clear_color[2], g_app.clear_color[3]},
+	action := sg.Pass_Action {
+		colors = {
+			0 = {
+				load_action = .CLEAR,
+				clear_value = {g_app.clear_color[0], g_app.clear_color[1], g_app.clear_color[2], g_app.clear_color[3]},
+			},
+		},
 	}
 	sg.begin_pass({action = action, swapchain = sglue.swapchain()})
+	simgui.render()
 	sg.end_pass()
 	sg.commit()
 }
@@ -121,22 +136,24 @@ app_init :: proc "c" () {
 	log.info("this is info")
 	log.error("this is error")
 
-	sg.setup({environment = sglue.environment(), logger = {func = slog.func}})
+	env := sglue.environment()
+	sg.setup({environment = env, logger = {func = slog.func}})
 
-	im.CHECKVERSION()
-	im.CreateContext()
-	defer im.DestroyContext()
-	io := im.GetIO()
-	io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad, .DockingEnable, .ViewportsEnable}
-	style := im.GetStyle()
-	style.WindowRounding = 0
-	style.Colors[im.Col.WindowBg].w = 1
-	im.StyleColorsDark()
+	simgui.setup()
+	
+	// im.CHECKVERSION()
+	// im.CreateContext()
+	// defer im.DestroyContext()
+	// io := im.GetIO()
+	// io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad, .DockingEnable, .ViewportsEnable}
+	// style := im.GetStyle()
+	// style.WindowRounding = 0
+	// style.Colors[im.Col.WindowBg].w = 1
+	// im.StyleColorsDark()
 
-	device := (^mtl.Device)(sg.mtl_device())
-
-	imgui_impl_metal.Init(device)
-	defer imgui_impl_metal.Shutdown()
+	// device := (^mtl.Device)(sg.mtl_device())
+	// imgui_impl_metal.Init(device)
+	// defer imgui_impl_metal.Shutdown()
 
 	g_app = new(data.App)
 	g_app^ = data.App {
@@ -157,6 +174,8 @@ app_init :: proc "c" () {
 app_shutdown :: proc "c" () {
 	context = g_context
 	log.destroy_console_logger(context.logger)
+
+	simgui.shutdown()
 	sg.shutdown()
 
 	sim.model_delete(g_app.counter)

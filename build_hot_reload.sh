@@ -22,10 +22,10 @@ case $(uname) in
     SOKOL_DYLIB_DIR="$PROJECT/sokol/dylib"
     SOKOL_DYLIB_NAME="sokol_dylib_macos_arm64_metal_debug.dylib"
     install_name_tool -id @loader_path/sokol/dylib/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME
-    cp $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
+    #cp $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
 
     DLL_EXT=".dylib"
-    EXTRA_LINKER_FLAGS="-v -Wl,-rpath $ROOT/vendor/raylib/$LIB_PATH"
+    EXTRA_LINKER_FLAGS="-v"
     #EXTRA_LINKER_FLAGS="$EXTRA_LINKER_FLAGS -Wl,$SOKOL_DIR/app/sokol_app$SOKOL_LIB_SUFFIX"
 
 
@@ -37,7 +37,7 @@ case $(uname) in
     # Copy the linux libraries into the project automatically.
     if [ ! -d "linux" ]; then
         mkdir linux
-        cp -r $ROOT/vendor/raylib/linux/libraylib*.so* linux
+        #cp -r $ROOT/vendor/raylib/linux/libraylib*.so* linux
     fi
     ;;
 esac
@@ -49,12 +49,12 @@ odin build app -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS"
 # Need to use a temp file on Linux because it first writes an empty `app.so`, which the app will load before it is actually fully written.
 mv app_tmp$DLL_EXT app$DLL_EXT
 
-# Do not build the app_hot_reload.bin if it is already running.
+# Do not build the app_hot_reload if it is already running.
 # -f is there to make sure we match against full name, including .bin
-if pgrep -fl 'app_hot_reload.bin' | grep -v 'lldb' > /dev/null; then
+if pgrep -fl 'app_hot_reload' | grep -v 'lldb' > /dev/null; then
     echo "App running, hot reloading..."
     exit 1
 else
-    echo "Building app_hot_reload.bin"
-    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:app_hot_reload.bin -strict-style -vet -debug
+    echo "Building app_hot_reload"
+    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:app_hot_reload -strict-style -vet -debug
 fi
