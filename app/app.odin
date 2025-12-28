@@ -29,6 +29,7 @@ import sg "../sokol/gfx"
 import sglue "../sokol/glue"
 import slog "../sokol/log"
 import "base:runtime"
+import "core:fmt"
 
 PIXEL_WINDOW_HEIGHT :: 180
 
@@ -38,12 +39,17 @@ g_force_reset: bool
 
 @(export)
 app_event :: proc "c" (e: ^sapp.Event) {
+	context = g_context
+
 	#partial switch e.type {
 	case .KEY_DOWN:
 		if e.key_code == .F6 {
 			g_force_reset = true
+			return
 		}
 	}
+
+	simgui.handle_event(e)	
 }
 
 update :: proc() {
@@ -75,10 +81,12 @@ update :: proc() {
 
 	if g_app.some_number % 100 == 0 {
 		if g_app.some_number % 200 == 0 {
-			log.info("--- OFF ---")
+			if g_app.counter_dbl_sub != nil {
+				sim.model_unsubscribe(g_app.counter, g_app.counter_dbl_sub)
+			}
+			g_app.counter_dbl_sub = nil
 		} else{
-			log.info("--- ON ---")
-			sim.model_observe(g_app.counter_dbl, g_app.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
+			g_app.counter_dbl_sub = sim.model_observe(g_app.counter_dbl, g_app.counter, proc(observer: ^data.Counter, mdl: data.Model(data.Counter), observed: data.Counter) {
 				observer.value = observed.value * 2 // should be good
 				sim.model_notify(mdl)
 			})
@@ -95,9 +103,21 @@ update :: proc() {
 }
 
 draw :: proc() {
-	show_demo_window := true
-	imgui.ShowDemoWindow(&show_demo_window)
+	// show_demo_window := true
+	// imgui.ShowDemoWindow(&show_demo_window)
 
+	imgui.SetNextWindowSize({ 300, 200 })
+	if imgui.Begin("Test") {
+		imgui.Text(g_app.counter_dbl_sub != nil ? "ON" : "OFF")
+		sim.model_get(g_app.counter, proc(c: data.Counter) {
+			imgui.Text(fmt.ctprintf("Counter: %v", c.value))
+		})
+		sim.model_get(g_app.counter_dbl, proc(c: data.Counter) {
+			imgui.Text(fmt.ctprintf("Double-Counter: %v", c.value))
+		})
+	}
+	imgui.End()
+	
 	action := sg.Pass_Action {
 		colors = {
 			0 = {
@@ -163,9 +183,9 @@ app_init :: proc "c" () {
 
 	g_app.counter = sim.model_new(g_app, data.Counter)
 	g_app.counter_dbl = sim.model_new(g_app, data.Counter)
-	sim.model_observe(g_app.counter_dbl, proc(c: data.Counter) {
-		log.infof("dbl counter is now: %v", c.value)
-	})
+	// sim.model_observe(g_app.counter_dbl, proc(c: data.Counter) {
+	// 	log.infof("dbl counter is now: %v", c.value)
+	// })
 
 	app_hot_reloaded(g_app)
 }

@@ -48,6 +48,15 @@ model_update :: proc(mdl: data.Model($T), cb: proc(^T, data.Model(T))) {
 	cb(ptr, mdl)
 }
 
+model_get :: proc(mdl: data.Model($T), cb: proc(T)) {
+	if int(mdl.idx) >= len(mdl.app.models_ptr) || mdl.gen != mdl.app.models_gen[mdl.idx] {
+		return
+	}
+
+	ptr := (^T)(mdl.app.models_ptr[mdl.idx])
+	cb(ptr^)
+}
+
 model_observe :: proc {
 	model_observe_model,
 	model_observe_anon,

@@ -1,6 +1,7 @@
 package sokol_imgui
 
 import sg "../sokol/gfx"
+import sapp "../sokol/app"
 import imgui "../imgui"
 
 @(private)
@@ -156,9 +157,12 @@ render :: proc() {
 	for cl_idx in 0 ..< draw_data.CmdListsCount {
 		cl := (cast([^]^imgui.DrawList)draw_data.CmdLists.Data)[cl_idx]
 
+		vb_offset: i32 = 0
+		ib_offset: i32 = 0
+		
 		num_verts := cl.VtxBuffer.Size
 		if num_verts > 0 {
-			sg.append_buffer(g_state.vertex_buffer, {
+			vb_offset = sg.append_buffer(g_state.vertex_buffer, {
 				ptr = cl.VtxBuffer.Data,
 				size = uint(num_verts) * size_of(imgui.DrawVert),
 			})
@@ -166,20 +170,17 @@ render :: proc() {
 
 		num_indices := cl.IdxBuffer.Size
 		if num_indices > 0 {
-			sg.append_buffer(g_state.index_buffer, {
+			ib_offset = sg.append_buffer(g_state.index_buffer, {
 				ptr = cl.IdxBuffer.Data,
 				size = uint(num_indices) * size_of(imgui.DrawIdx),
 			})
 		}
 
-		vb_offset := sg.query_buffer_info(g_state.vertex_buffer).append_pos - num_verts * size_of(imgui.DrawVert)
-		ib_offset := sg.query_buffer_info(g_state.index_buffer).append_pos - num_indices * size_of(imgui.DrawIdx)
-
 		bindings := sg.Bindings{
 			vertex_buffers = { 0 = g_state.vertex_buffer },
-			vertex_buffer_offsets = { 0 = i32(vb_offset) },
+			vertex_buffer_offsets = { 0 = vb_offset },
 			index_buffer = g_state.index_buffer,
-			index_buffer_offset = i32(ib_offset),
+			index_buffer_offset = ib_offset,
 		}
 
 		for cmd_idx in 0 ..< cl.CmdBuffer.Size {
@@ -347,3 +348,170 @@ fragment float4 _main(fs_in inp [[stage_in]], texture2d<float> tex [[texture(0)]
 	return tex.sample(smp, inp.uv) * inp.color;
 }
 `
+
+@(private)
+map_keycode :: proc(key: sapp.Keycode) -> imgui.Key {
+    #partial switch key {
+    case .SPACE:         return .Space
+    case .APOSTROPHE:    return .Apostrophe
+    case .COMMA:         return .Comma
+    case .MINUS:         return .Minus
+    case .PERIOD:        return .Period
+    case .SLASH:         return .Slash
+    case ._0:            return ._0
+    case ._1:            return ._1
+    case ._2:            return ._2
+    case ._3:            return ._3
+    case ._4:            return ._4
+    case ._5:            return ._5
+    case ._6:            return ._6
+    case ._7:            return ._7
+    case ._8:            return ._8
+    case ._9:            return ._9
+    case .SEMICOLON:     return .Semicolon
+    case .EQUAL:         return .Equal
+    case .A:             return .A
+    case .B:             return .B
+    case .C:             return .C
+    case .D:             return .D
+    case .E:             return .E
+    case .F:             return .F
+    case .G:             return .G
+    case .H:             return .H
+    case .I:             return .I
+    case .J:             return .J
+    case .K:             return .K
+    case .L:             return .L
+    case .M:             return .M
+    case .N:             return .N
+    case .O:             return .O
+    case .P:             return .P
+    case .Q:             return .Q
+    case .R:             return .R
+    case .S:             return .S
+    case .T:             return .T
+    case .U:             return .U
+    case .V:             return .V
+    case .W:             return .W
+    case .X:             return .X
+    case .Y:             return .Y
+    case .Z:             return .Z
+    case .LEFT_BRACKET:  return .LeftBracket
+    case .BACKSLASH:     return .Backslash
+    case .RIGHT_BRACKET: return .RightBracket
+    case .GRAVE_ACCENT:  return .GraveAccent
+    case .ESCAPE:        return .Escape
+    case .ENTER:         return .Enter
+    case .TAB:           return .Tab
+    case .BACKSPACE:     return .Backspace
+    case .INSERT:        return .Insert
+    case .DELETE:        return .Delete
+    case .RIGHT:         return .RightArrow
+    case .LEFT:          return .LeftArrow
+    case .DOWN:          return .DownArrow
+    case .UP:            return .UpArrow
+    case .PAGE_UP:       return .PageUp
+    case .PAGE_DOWN:     return .PageDown
+    case .HOME:          return .Home
+    case .END:           return .End
+    case .CAPS_LOCK:     return .CapsLock
+    case .SCROLL_LOCK:   return .ScrollLock
+    case .NUM_LOCK:      return .NumLock
+    case .PRINT_SCREEN:  return .PrintScreen
+    case .PAUSE:         return .Pause
+    case .F1:            return .F1
+    case .F2:            return .F2
+    case .F3:            return .F3
+    case .F4:            return .F4
+    case .F5:            return .F5
+    case .F6:            return .F6
+    case .F7:            return .F7
+    case .F8:            return .F8
+    case .F9:            return .F9
+    case .F10:           return .F10
+    case .F11:           return .F11
+    case .F12:           return .F12
+    case .KP_0:          return .Keypad0
+    case .KP_1:          return .Keypad1
+    case .KP_2:          return .Keypad2
+    case .KP_3:          return .Keypad3
+    case .KP_4:          return .Keypad4
+    case .KP_5:          return .Keypad5
+    case .KP_6:          return .Keypad6
+    case .KP_7:          return .Keypad7
+    case .KP_8:          return .Keypad8
+    case .KP_9:          return .Keypad9
+    case .KP_DECIMAL:    return .KeypadDecimal
+    case .KP_DIVIDE:     return .KeypadDivide
+    case .KP_MULTIPLY:   return .KeypadMultiply
+    case .KP_SUBTRACT:   return .KeypadSubtract
+    case .KP_ADD:        return .KeypadAdd
+    case .KP_ENTER:      return .KeypadEnter
+    case .KP_EQUAL:      return .KeypadEqual
+    case .LEFT_SHIFT:    return .LeftShift
+    case .LEFT_CONTROL:  return .LeftCtrl
+    case .LEFT_ALT:      return .LeftAlt
+    case .LEFT_SUPER:    return .LeftSuper
+    case .RIGHT_SHIFT:   return .RightShift
+    case .RIGHT_CONTROL: return .RightCtrl
+    case .RIGHT_ALT:     return .RightAlt
+    case .RIGHT_SUPER:   return .RightSuper
+    case .MENU:          return .Menu
+    case:                return .None
+    }
+}
+
+@(private)
+update_modifiers :: proc(mods: u32) {
+	io := imgui.GetIO()
+	imgui.IO_AddKeyEvent(io, .ImGuiMod_Ctrl, mods & sapp.MODIFIER_CTRL != 0)
+	imgui.IO_AddKeyEvent(io, .ImGuiMod_Shift, mods & sapp.MODIFIER_SHIFT != 0)
+	imgui.IO_AddKeyEvent(io, .ImGuiMod_Alt, mods & sapp.MODIFIER_ALT != 0)
+	imgui.IO_AddKeyEvent(io, .ImGuiMod_Super, mods & sapp.MODIFIER_SUPER != 0)
+}
+
+handle_event :: proc(ev: ^sapp.Event) {
+	io := imgui.GetIO()
+
+	#partial switch ev.type {
+	case .FOCUSED:
+		imgui.IO_AddFocusEvent(io, true)
+
+	case .UNFOCUSED:
+		imgui.IO_AddFocusEvent(io, false)
+
+	case .MOUSE_DOWN:
+		update_modifiers(ev.modifiers)
+		mouse_x := ev.mouse_x / g_state.dpi_scale
+		mouse_y := ev.mouse_y / g_state.dpi_scale
+		imgui.IO_AddMousePosEvent(io, mouse_x, mouse_y)
+		imgui.IO_AddMouseButtonEvent(io, i32(ev.mouse_button), true)
+
+	case .MOUSE_UP:
+		update_modifiers(ev.modifiers)
+		mouse_x := ev.mouse_x / g_state.dpi_scale
+		mouse_y := ev.mouse_y / g_state.dpi_scale
+		imgui.IO_AddMousePosEvent(io, mouse_x, mouse_y)
+		imgui.IO_AddMouseButtonEvent(io, i32(ev.mouse_button), false)
+
+	case .MOUSE_MOVE:
+		mouse_x := ev.mouse_x / g_state.dpi_scale
+		mouse_y := ev.mouse_y / g_state.dpi_scale
+		imgui.IO_AddMousePosEvent(io, mouse_x, mouse_y)
+
+	case .MOUSE_SCROLL:
+		update_modifiers(ev.modifiers)
+		imgui.IO_AddMouseWheelEvent(io, ev.scroll_x, ev.scroll_y)
+
+	case .KEY_DOWN, .KEY_UP:
+		update_modifiers(ev.modifiers)
+		down := ev.type == .KEY_DOWN
+		imgui_key := map_keycode(ev.key_code)
+		imgui.IO_AddKeyEvent(io, imgui_key, down)
+
+	case .CHAR:
+		if ev.char_code >= 32 {
+			imgui.IO_AddInputCharacter(io, ev.char_code)
+		}
+	}
+}

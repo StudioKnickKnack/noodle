@@ -12,5 +12,6 @@ App :: struct {
 
 	counter: Model(Counter),
 	counter_dbl: Model(Counter),
+	counter_dbl_sub: ^Subscription,
 }
 
