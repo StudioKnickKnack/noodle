@@ -67,9 +67,11 @@ draw :: proc() {
 
 	imgui.SetNextWindowDockID(simgui.main_dock_id(), .FirstUseEver)
 	imgui.SetNextWindowSize({ 300, 200 })
-	if imgui.Begin("Test") {
+	if imgui.Begin("Test_uio") {
 		imgui.Text(g_app.counter_dbl_sub != nil ? "ON" : "OFF")
+		_ = fmt.ctprintf("test test: %v\n", g_app)
 		sim.model_get(g_app.counter, proc(c: data.Counter) {
+			_ = fmt.ctprintf("test test: %v\n", g_app)
 			imgui.Text(fmt.ctprintf("Counter: %v", c.value))
 		})
 		sim.model_get(g_app.counter_dbl, proc(c: data.Counter) {
@@ -95,6 +97,7 @@ draw :: proc() {
 @(export)
 app_update :: proc "c" () {
 	context = g_context
+	_ = fmt.ctprintf("test test: %v\n", g_app)
 	update()
 	draw()
 }
@@ -109,10 +112,16 @@ app_init :: proc "c" () {
 	context = g_context
 	g_context.logger = log.create_console_logger()
 
+	g_app = new(data.App)
+	g_app^ = data.App {
+		some_number = 100,
+		clear_color = {0.0, 0.0, 1.0, 1.0},
+	}
+
 	env := sglue.environment()
 	sg.setup({environment = env, logger = {func = slog.func}})
 
-	simgui.setup({.DockingEnable, .ViewportsEnable})
+	simgui.setup(&g_app.imgui, {.DockingEnable, .ViewportsEnable})
 	
 	// im.CHECKVERSION()
 	// im.CreateContext()
@@ -127,12 +136,6 @@ app_init :: proc "c" () {
 	// device := (^mtl.Device)(sg.mtl_device())
 	// imgui_impl_metal.Init(device)
 	// defer imgui_impl_metal.Shutdown()
-
-	g_app = new(data.App)
-	g_app^ = data.App {
-		some_number = 100,
-		clear_color = {0.0, 0.0, 1.0, 1.0},
-	}
 
 	g_app.counter = sim.model_new(g_app, data.Counter)
 	g_app.counter_dbl = sim.model_new(g_app, data.Counter)
@@ -163,6 +166,7 @@ app_shutdown_window :: proc() {
 
 @(export)
 app_memory :: proc() -> rawptr {
+	fmt.printfln("[Hot Reload] App about to hot reload, storing state..")
 	return g_app
 }
 
@@ -173,7 +177,19 @@ app_memory_size :: proc() -> int {
 
 @(export)
 app_hot_reloaded :: proc(mem: rawptr) {
+	fmt.printfln("[Hot Reload] App hot reloaded, restoring state")
+
+	if context != g_context {
+		fmt.printfln("[Hot Reload] App hot reloaded, restoring context")
+		g_context = runtime.default_context()
+		context = g_context
+		g_context.logger = log.create_console_logger()
+	}
+	
 	g_app = (^data.App)(mem)
+	simgui.hot_reloaded(&g_app.imgui)
+
+	_ = fmt.ctprintf("test test: %v\n", g_app)
 }
 
 @(export)

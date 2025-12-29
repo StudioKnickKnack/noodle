@@ -72,6 +72,8 @@ load_app_api :: proc(api_version: int) -> (api: App_API, ok: bool) {
 	)
 	copy_dll(app_dll_name) or_return
 
+	fmt.printfln("[Hot Reload] Loading and initializing %v", app_dll_name)
+
 	// This proc matches the names of the fields in App_API to symbols in the
 	// app DLL. It actually looks for symbols starting with `app_`, which is
 	// why the argument `"app_"` is there.
@@ -89,11 +91,13 @@ load_app_api :: proc(api_version: int) -> (api: App_API, ok: bool) {
 
 unload_app_api :: proc(api: ^App_API) {
 	if api.lib != nil {
+		fmt.printfln("[Hot Reload] Unloading lib %v", api.lib)
 		if !dynlib.unload_library(api.lib) {
 			fmt.printfln("Failed unloading lib: {0}", dynlib.last_error())
 		}
 	}
 
+	fmt.printfln("[Hot Reload] Removing file %v", api.lib)
 	if os.remove(fmt.tprintf("app_{0}" + DLL_EXT, api.api_version)) != nil {
 		fmt.printfln("Failed to remove app_{0}" + DLL_EXT + " copy", api.api_version)
 	}

@@ -18,9 +18,9 @@ Vs_Params :: struct {
 	_pad:      [8]u8,
 }
 
-@(private)
 State :: struct {
 	is_inited:     bool,
+	ctx:           ^imgui.Context,
 	dpi_scale:     f32,
 	vertex_buffer: sg.Buffer,
 	index_buffer:  sg.Buffer,
@@ -35,16 +35,17 @@ State :: struct {
 }
 
 @(private)
-g_state: State
+g_state: ^State
 
 @(private)
 MAX_VERTICES :: 65536
 
-setup :: proc(flags: imgui.ConfigFlags = {}) {
+setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
+	g_state = state
 	imgui.CHECKVERSION()
 
 	if (imgui.GetCurrentContext() == nil) {
-		imgui.CreateContext()
+		g_state.ctx = imgui.CreateContext()
 	}
 
 	io := imgui.GetIO()
@@ -106,6 +107,11 @@ setup :: proc(flags: imgui.ConfigFlags = {}) {
 	build_font_atlas()
 
 	g_state.is_inited = true
+}
+
+hot_reloaded :: proc(state: ^State) {
+	g_state = state
+	imgui.SetCurrentContext(g_state.ctx)
 }
 
 shutdown :: proc() {
