@@ -224,7 +224,7 @@ main :: proc() {
 			event_userdata_cb = event,
 			width = 1280,
 			height = 720,
-			window_title = "Odin + Sokol",
+			window_title = "noodle",
 			icon = {sokol_default = true},
 			logger = {func = slog.func},
 		},

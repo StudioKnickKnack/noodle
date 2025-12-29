@@ -67,7 +67,7 @@ draw :: proc() {
 
 	imgui.SetNextWindowDockID(simgui.main_dock_id(), .FirstUseEver)
 	imgui.SetNextWindowSize({ 300, 200 })
-	if imgui.Begin("Test_uio") {
+	if imgui.Begin("Test") {
 		imgui.Text(g_app.counter_dbl_sub != nil ? "ON" : "OFF")
 		_ = fmt.ctprintf("test test: %v\n", g_app)
 		sim.model_get(g_app.counter, proc(c: data.Counter) {
@@ -166,7 +166,9 @@ app_shutdown_window :: proc() {
 
 @(export)
 app_memory :: proc() -> rawptr {
-	fmt.printfln("[Hot Reload] App about to hot reload, storing state..")
+	free_all(context.temp_allocator)
+
+	fmt.println("[Hot Reload] App about to hot reload, storing state..")
 	return g_app
 }
 
@@ -177,10 +179,10 @@ app_memory_size :: proc() -> int {
 
 @(export)
 app_hot_reloaded :: proc(mem: rawptr) {
-	fmt.printfln("[Hot Reload] App hot reloaded, restoring state")
+	fmt.println("[Hot Reload] App hot reloaded, restoring state")
 
 	if context != g_context {
-		fmt.printfln("[Hot Reload] App hot reloaded, restoring context")
+		fmt.println("[Hot Reload] App hot reloaded, restoring context")
 		g_context = runtime.default_context()
 		context = g_context
 		g_context.logger = log.create_console_logger()

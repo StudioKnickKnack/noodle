@@ -16,7 +16,7 @@ main :: proc() {
 			event_cb = app.app_event,
 			width = 1280,
 			height = 720,
-			window_title = "Odin + Sokol",
+			window_title = "noodle",
 			icon = {sokol_default = true},
 			logger = {func = slog.func},
 		},
