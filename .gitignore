@@ -16,6 +16,6 @@ log.txt
 linux
 atlas.png
 pdbs/
-imgui.ini
+.layout_state
 app_hot_reload
 .DS_Store

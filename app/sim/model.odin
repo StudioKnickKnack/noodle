@@ -1,7 +1,6 @@
 package sim
 
 import "../data"
-import "core:log"
 
 model_new :: proc(a: ^data.App, $T: typeid) -> data.Model(T) {
 	mdl := data.Model(T){ app = a }

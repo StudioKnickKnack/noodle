@@ -3,6 +3,8 @@ package sokol_imgui
 import sg "../sokol/gfx"
 import sapp "../sokol/app"
 import imgui "../imgui"
+import fonts "../fonts"
+import "core:fmt"
 
 @(private)
 Frame_Desc :: struct {
@@ -28,9 +30,6 @@ State :: struct {
 	pipe:          sg.Pipeline,
 	vertices:      []imgui.DrawVert,
 	indices:       []imgui.DrawIdx,
-	font_img:      sg.Image,
-	font_view:     sg.View,
-	font_smp:      sg.Sampler,
 	dock_id:       imgui.ID,
 }
 
@@ -44,14 +43,20 @@ setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
 	g_state = state
 	imgui.CHECKVERSION()
 
-	if (imgui.GetCurrentContext() == nil) {
-		g_state.ctx = imgui.CreateContext()
-	}
+	g_state.vertices = make([]imgui.DrawVert, MAX_VERTICES)
+	g_state.indices = make([]imgui.DrawIdx, MAX_VERTICES * 3)
+
+	g_state.ctx = imgui.CreateContext()
+	imgui.StyleColorsDark()
 
 	io := imgui.GetIO()
+	imgui.FontAtlas_AddFontFromMemoryCompressedTTF(io.Fonts, rawptr(&fonts.GEIST_MEDIUM_compressed_data[0]), i32(fonts.GEIST_MEDIUM_compressed_size))
+	io.IniFilename = ".layout_state"
+	io.ConfigMacOSXBehaviors = ODIN_OS == .Darwin
+	io.BackendRendererName = "sokol-imgui-odin"
+	io.BackendFlags += {.RendererHasVtxOffset, .RendererHasTextures, .HasMouseCursors}
 	io.ConfigFlags += flags
-	io.BackendFlags += {.RendererHasVtxOffset}
-
+	
 	g_state.vertex_buffer = sg.make_buffer({
 		usage = { vertex_buffer = true, stream_update = true },
 		size = MAX_VERTICES * size_of(imgui.DrawVert),
@@ -62,14 +67,6 @@ setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
 		usage = {index_buffer = true, stream_update = true},
 		size = MAX_VERTICES * 3 * size_of(imgui.DrawIdx),
 		label = "simgui-indices",
-	})
-
-	g_state.font_smp = sg.make_sampler({
-		min_filter = .LINEAR,
-		mag_filter = .LINEAR,
-		wrap_u = .CLAMP_TO_EDGE,
-		wrap_v = .CLAMP_TO_EDGE,
-		label = "simgui-font-sampler",
 	})
 
 	g_state.shader = sg.make_shader(get_shader_desc(sg.query_backend()))
@@ -104,8 +101,6 @@ setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
 	}
 	g_state.pipe = sg.make_pipeline(pipe_desc)
 
-	build_font_atlas()
-
 	g_state.is_inited = true
 }
 
@@ -125,6 +120,9 @@ shutdown :: proc() {
 	sg.destroy_shader(g_state.shader)
 	sg.destroy_buffer(g_state.index_buffer)
 	sg.destroy_buffer(g_state.vertex_buffer)
+
+	delete(g_state.indices)
+	delete(g_state.vertices)
 }
 
 new_frame :: proc(desc: Frame_Desc) {
@@ -146,8 +144,51 @@ new_frame :: proc(desc: Frame_Desc) {
 render :: proc() {
 	imgui.Render()
 	draw_data := imgui.GetDrawData()
-	if draw_data == nil || draw_data.CmdListsCount == 0 {
+	if draw_data == nil {
 		return
+	}
+
+	update_textures(draw_data)
+
+	if draw_data.CmdListsCount == 0 {
+		return
+	}
+
+	all_vtx_count := 0
+	all_idx_count := 0
+	cmd_list_count := 0
+	for cl_idx in 0 ..< draw_data.CmdListsCount {
+		cmd_list_count += 1
+		cl := (cast([^]^imgui.DrawList)draw_data.CmdLists.Data)[cl_idx]
+		vtx_count := int(cl.VtxBuffer.Size)
+		idx_count := int(cl.IdxBuffer.Size)
+
+		if all_vtx_count + vtx_count > len(g_state.vertices) || all_idx_count + idx_count > len(g_state.indices) {
+			fmt.panicf("sokol imgui buffer overflow v:%v/%v i:%v/%v", all_vtx_count + vtx_count, len(g_state.vertices), all_idx_count + idx_count, len(g_state.indices)) 
+		}
+
+		if vtx_count > 0 {
+			src := (cast([^]imgui.DrawVert)cl.VtxBuffer.Data)[:vtx_count]
+			copy(g_state.vertices[all_vtx_count:], src)
+			all_vtx_count += vtx_count
+		}
+		if idx_count > 0 {
+			src := (cast([^]imgui.DrawIdx)cl.IdxBuffer.Data)[:idx_count]
+			copy(g_state.indices[all_idx_count:], src)
+			all_idx_count += idx_count
+		}
+	}
+	if cmd_list_count == 0 {
+		return
+	}
+
+	if all_vtx_count > 0 {
+		vtx_data := sg.Range{ptr = raw_data(g_state.vertices), size = uint(all_vtx_count * size_of(imgui.DrawVert))}
+		sg.update_buffer(g_state.vertex_buffer, vtx_data)
+	}
+	if all_idx_count > 0 {
+		idx_data := sg.Range{ptr = raw_data(g_state.indices), size = uint(all_idx_count * size_of(imgui.DrawIdx))}
+		sg.update_buffer(g_state.index_buffer, idx_data)
 	}
 
 	io := imgui.GetIO()
@@ -156,6 +197,8 @@ render :: proc() {
 	if (fb_width <= 0 || fb_height <= 0) {
 		return
 	}
+	sg.apply_viewport(0, 0, fb_width, fb_height, true)
+	sg.apply_scissor_rect(0, 0, fb_width, fb_height, true)
 
 	sg.apply_pipeline(g_state.pipe)
 	vs_params := Vs_Params {
@@ -163,105 +206,149 @@ render :: proc() {
 	}
 	sg.apply_uniforms(0, { ptr = &vs_params, size = size_of(vs_params) })
 
+	bindings := sg.Bindings {
+		vertex_buffers = { 0 = g_state.vertex_buffer },
+		index_buffer = g_state.index_buffer,
+	}
+	tex_id: imgui.TextureID = 0
+	vb_offset: i32 = 0
+	ib_offset: i32 = 0
 	for cl_idx in 0 ..< draw_data.CmdListsCount {
 		cl := (cast([^]^imgui.DrawList)draw_data.CmdLists.Data)[cl_idx]
-
-		vb_offset: i32 = 0
-		ib_offset: i32 = 0
-		
-		num_verts := cl.VtxBuffer.Size
-		if num_verts > 0 {
-			vb_offset = sg.append_buffer(g_state.vertex_buffer, {
-				ptr = cl.VtxBuffer.Data,
-				size = uint(num_verts) * size_of(imgui.DrawVert),
-			})
-		}
-
-		num_indices := cl.IdxBuffer.Size
-		if num_indices > 0 {
-			ib_offset = sg.append_buffer(g_state.index_buffer, {
-				ptr = cl.IdxBuffer.Data,
-				size = uint(num_indices) * size_of(imgui.DrawIdx),
-			})
-		}
-
-		bindings := sg.Bindings{
-			vertex_buffers = { 0 = g_state.vertex_buffer },
-			vertex_buffer_offsets = { 0 = vb_offset },
-			index_buffer = g_state.index_buffer,
-			index_buffer_offset = ib_offset,
-		}
 
 		for cmd_idx in 0 ..< cl.CmdBuffer.Size {
 			cmd := &(cast([^]imgui.DrawCmd)cl.CmdBuffer.Data)[cmd_idx]
 
 			if cmd.UserCallback != nil {
 				cmd.UserCallback(cl, cmd)
+				sg.reset_state_cache()
+				sg.apply_viewport(0, 0, fb_width, fb_height, true)
 				sg.apply_pipeline(g_state.pipe)
 				sg.apply_uniforms(0, { ptr = &vs_params, size = size_of(vs_params) })
+				sg.apply_bindings(bindings)
 				continue
 			}
 
-			clip_x := i32(cmd.ClipRect.x * g_state.dpi_scale)
-			clip_y := i32(cmd.ClipRect.y * g_state.dpi_scale)
-			clip_w := i32((cmd.ClipRect.z - cmd.ClipRect.x) * g_state.dpi_scale)
-			clip_h := i32((cmd.ClipRect.w - cmd.ClipRect.y) * g_state.dpi_scale)
-
-			if clip_x < fb_width && clip_y < fb_height && clip_w > 0 && clip_h > 0 {
-				sg.apply_scissor_rect(clip_x, clip_y, clip_w, clip_h, true)
-
-				tex_view := texture_view_from_imtextureid(cmd.TextureId)
-				tex_smp := sampler_from_imtextureid(cmd.TextureId)
-				bindings.views[0] = tex_view
-				bindings.samplers[0] = tex_smp
-				sg.apply_bindings(bindings)
-
-				sg.draw(i32(cmd.IdxOffset), i32(cmd.ElemCount), 1)
+			cmd_tex_id := imgui.DrawCmd_GetTexID(cmd)
+			if tex_id != cmd_tex_id {
+				tex_id = cmd_tex_id
+				pipe := bind_texture_sampler(&bindings, tex_id)
+				sg.apply_pipeline(pipe)
+				sg.apply_uniforms(0, { ptr = &vs_params, size = size_of(vs_params) })
 			}
+
+			bindings.vertex_buffer_offsets[0] = vb_offset + i32(cmd.VtxOffset * size_of(imgui.DrawVert))
+			bindings.index_buffer_offset = ib_offset
+			sg.apply_bindings(bindings)
+
+			clip_x := i32(cmd.ClipRect.x * draw_data.FramebufferScale.x)
+			clip_y := i32(cmd.ClipRect.y * draw_data.FramebufferScale.y)
+			clip_w := i32((cmd.ClipRect.z - cmd.ClipRect.x) * draw_data.FramebufferScale.x)
+			clip_h := i32((cmd.ClipRect.w - cmd.ClipRect.y) * draw_data.FramebufferScale.y)
+			sg.apply_scissor_rect(clip_x, clip_y, clip_w, clip_h, true)
+
+			sg.draw(i32(cmd.IdxOffset), i32(cmd.ElemCount), 1)
 		}
+
+		vb_offset += cl.VtxBuffer.Size * size_of(imgui.DrawVert)
+		ib_offset += cl.IdxBuffer.Size * size_of(imgui.DrawIdx)
 	}
 
+	sg.apply_viewport(0, 0, fb_width, fb_height, true)
 	sg.apply_scissor_rect(0, 0, fb_width, fb_height, true)
+}
+
+@(private)
+bind_texture_sampler :: proc(bindings: ^sg.Bindings, imtex: imgui.TextureID) -> sg.Pipeline {
+	view := texture_view_from_imtextureid(imtex)
+	assert(view.id != 0)
+	img := sg.query_view_image(view)
+	assert(img.id != 0)
+	bindings.views[0] = view
+	bindings.samplers[0] = sampler_from_imtextureid(imtex)
+	assert(bindings.samplers[0].id != 0)
+
+	// non-filtering shader pipeline currently not implemented
+	assert(sg.query_pixelformat(sg.query_image_pixelformat(img)).filter)
+
+	return g_state.pipe
+}
+
+@(private)
+update_textures :: proc(draw_data: ^imgui.DrawData) {
+	if draw_data.Textures.Size == 0 {
+		return
+	}
+
+	textures := ([^]^imgui.TextureData)(draw_data.Textures.Data)[:draw_data.Textures.Size]
+
+	for tex in textures {
+		if tex.Status == .OK {
+			continue
+		}
+
+		if tex.Status == .WantCreate {
+			img := sg.make_image({
+				usage = {
+					dynamic_update = true,
+				},
+				width = tex.Width,
+				height = tex.Height,
+				pixel_format = .RGBA8,
+				label = "simgui-texture",
+			})
+
+			view := sg.make_view({
+				texture = {image = img},
+				label = "simgui-texture-view",
+			})
+
+			smp := sg.make_sampler({
+				min_filter = .LINEAR,
+				mag_filter = .LINEAR,
+				wrap_u = .CLAMP_TO_EDGE,
+				wrap_v = .CLAMP_TO_EDGE,
+				label = "simgui-sampler",
+			})
+
+			imgui.TextureData_SetTexID(tex, imtextureid_with_sampler(view, smp))
+		}
+		if tex.Status == .WantCreate || tex.Status == .WantUpdates {
+			assert(tex.TexID != 0)
+			view := texture_view_from_imtextureid(tex.TexID)
+			img := sg.query_view_image(view)
+			assert(img.id != 0)
+			sg.update_image(img, {
+				mip_levels = { 0 = {
+					ptr = tex.Pixels,
+					size = uint(imgui.TextureData_GetSizeInBytes(tex)),
+				}},
+			})
+			imgui.TextureData_SetStatus(tex, .OK)
+		}
+		if tex.Status == .WantDestroy && tex.UnusedFrames > 0 {
+			destroy_texture(tex)
+		}
+	}
+}
+
+@(private)
+destroy_texture :: proc(tex: ^imgui.TextureData) {
+	assert(tex != nil)
+	assert(tex.TexID != 0)
+	view := texture_view_from_imtextureid(tex.TexID)
+	img := sg.query_view_image(view)
+	assert(img.id != 0)
+	smp := sampler_from_imtextureid(tex.TexID)
+	sg.destroy_view(view)
+	sg.destroy_image(img)
+	sg.destroy_sampler(smp)
+	imgui.TextureData_SetTexID(tex, 0)
+	imgui.TextureData_SetStatus(tex, .Destroyed)
 }
 
 main_dock_id :: proc() -> imgui.ID {
 	return g_state.dock_id
-}
-
-@(private)
-build_font_atlas :: proc() {
-	io := imgui.GetIO()
-
-	pixels: ^u8
-	width, height: i32
-	imgui.FontAtlas_GetTexDataAsRGBA32(io.Fonts, &pixels, &width, &height)
-
-	if g_state.font_img.id != 0 {
-		sg.destroy_view(g_state.font_view)
-		sg.destroy_image(g_state.font_img)
-	}
-
-	g_state.font_img = sg.make_image({
-		width = width,
-		height = height,
-		pixel_format = .RGBA8,
-		label = "simgui-font",
-		data = {
-			mip_levels = {
-				0 = {
-					ptr = pixels,
-					size = uint(width * height * 4),
-				},
-			},
-		},
-	})
-
-	g_state.font_view = sg.make_view({
-		texture = { image = g_state.font_img },
-		label = "simgui-font-view",
-	})
-
-	io.Fonts.TexID = imtextureid_with_sampler(g_state.font_view, g_state.font_smp)
 }
 
 @(private)
@@ -272,46 +359,137 @@ imtextureid_with_sampler :: proc(tex_view: sg.View, smp: sg.Sampler) -> imgui.Te
 }
 
 @(private)
-texture_view_from_imtextureid :: proc(imtex_id: imgui.TextureID) -> sg.View {
-	id := u64(uintptr(imtex_id))
+imtextureref_with_sampler :: proc(tex_view: sg.View, smp:sg.Sampler) -> imgui.TextureRef {
+	view_id := u64(tex_view.id)
+	smp_id := u64(smp.id)
+	return imgui.TextureRef{ _TexID = (view_id << 32) | smp_id }
+}
+
+@(private)
+texture_view_from_imtextureid :: proc(imtex: imgui.TextureID) -> sg.View {
+	id := u64(uintptr(imtex))
 	return sg.View{id = u32(id >> 32)}
 }
 
 @(private)
-sampler_from_imtextureid :: proc(imtex_id: imgui.TextureID) -> sg.Sampler {
-	id := u64(uintptr(imtex_id))
+sampler_from_imtextureid :: proc(imtex: imgui.TextureID) -> sg.Sampler {
+	id := u64(uintptr(imtex))
+	return sg.Sampler{id = u32(id & 0xFFFFFFFF)}
+}
+
+@(private)
+texture_view_from_imtextureref :: proc(imtex_ref: imgui.TextureRef) -> sg.View {
+	id := u64(uintptr(imtex_ref._TexID))
+	return sg.View{id = u32(id >> 32)}
+}
+
+@(private)
+sampler_from_imtextureref :: proc(imtex_ref: imgui.TextureRef) -> sg.Sampler {
+	id := u64(uintptr(imtex_ref._TexID))
 	return sg.Sampler{id = u32(id & 0xFFFFFFFF)}
 }
 
 @(private)
 get_shader_desc :: proc(backend: sg.Backend) -> sg.Shader_Desc {
-	desc: sg.Shader_Desc
-	desc.label = "simgui-shader"
+	// desc: sg.Shader_Desc
+	// desc.label = "simgui-shader"
 
-	desc.uniform_blocks[0] = {
-		stage = .VERTEX,
-		size = size_of(Vs_Params),
-		glsl_uniforms = {
-			0 = { glsl_name = "vs_params", type = .FLOAT2 },
-		},
-	}
+	// desc.uniform_blocks[0] = {
+	// 	stage = .VERTEX,
+	// 	size = size_of(Vs_Params),
+	// 	glsl_uniforms = {
+	// 		0 = { glsl_name = "vs_params", type = .FLOAT2 },
+	// 	},
+	// }
 
-	desc.views[0] = {
-		texture = {
-			stage = .FRAGMENT,
-			image_type = ._2D,
-			sample_type = .FLOAT,
-		},
-	}
-	desc.samplers[0] = {
-		stage = .FRAGMENT,
-		sampler_type = .FILTERING,
-	}
-	desc.texture_sampler_pairs[0] = {
-		stage = .FRAGMENT,
-		view_slot = 0,
-		sampler_slot = 0,
-		glsl_name = "tex_smp",
+	// desc.views[0] = {
+	// 	texture = {
+	// 		stage = .FRAGMENT,
+	// 		image_type = ._2D,
+	// 		sample_type = .FLOAT,
+	// 	},
+	// }
+	// desc.samplers[0] = {
+	// 	stage = .FRAGMENT,
+	// 	sampler_type = .FILTERING,
+	// }
+	// desc.texture_sampler_pairs[0] = {
+	// 	stage = .FRAGMENT,
+	// 	view_slot = 0,
+	// 	sampler_slot = 0,
+	// 	glsl_name = "tex_smp",
+	// }
+
+	desc := sg.Shader_Desc{
+	    attrs = {
+	        0 = {
+	            glsl_name = "position",
+	            hlsl_sem_name = "TEXCOORD",
+	            hlsl_sem_index = 0,
+	            base_type = .FLOAT,
+	        },
+	        1 = {
+	            glsl_name = "texcoord0",
+	            hlsl_sem_name = "TEXCOORD",
+	            hlsl_sem_index = 1,
+	            base_type = .FLOAT,
+	        },
+	        2 = {
+	            glsl_name = "color0",
+	            hlsl_sem_name = "TEXCOORD",
+	            hlsl_sem_index = 2,
+	            base_type = .FLOAT,
+	        },
+	    },
+	    uniform_blocks = {
+	        0 = {
+	            stage = .VERTEX,
+	            size = size_of(Vs_Params),
+	            hlsl_register_b_n = 0,
+	            msl_buffer_n = 0,
+	            wgsl_group0_binding_n = 0,
+	            spirv_set0_binding_n = 0,
+	            glsl_uniforms = {
+	                0 = {
+	                    glsl_name = "vs_params",
+	                    type = .FLOAT4,
+	                    array_count = 1,
+	                },
+	            },
+	        },
+	    },
+	    views = {
+	        0 = {
+	            texture = {
+	                stage = .FRAGMENT,
+	                image_type = ._2D,
+	                sample_type = .FLOAT,
+	                hlsl_register_t_n = 0,
+	                msl_texture_n = 0,
+	                wgsl_group1_binding_n = 0,
+	                spirv_set1_binding_n = 0,
+	            },
+	        },
+	    },
+	    samplers = {
+	        0 = {
+	            stage = .FRAGMENT,
+	            sampler_type = .FILTERING,
+	            hlsl_register_s_n = 0,
+	            msl_sampler_n = 0,
+	            wgsl_group1_binding_n = 32,
+	            spirv_set1_binding_n = 32,
+	        },
+	    },
+	    texture_sampler_pairs = {
+	        0 = {
+	            stage = .FRAGMENT,
+	            view_slot = 0,
+	            sampler_slot = 0,
+	            glsl_name = "tex_smp",
+	        },
+	    },
+	    label = "sokol-imgui-shader",
 	}
 
 	#partial switch backend {

@@ -11,11 +11,6 @@ App :: struct {
 	
 	imgui: simgui.State,
 	
-	some_number: int,
-	clear_color: [4]f32,
-
-	counter: Model(Counter),
-	counter_dbl: Model(Counter),
-	counter_dbl_sub: ^Subscription,
+	style : Style,
 }
 
