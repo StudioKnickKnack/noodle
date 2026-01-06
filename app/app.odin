@@ -1,14 +1,15 @@
 package app
 
 import "data"
+import "ui/fonts"
 import "base:runtime"
 import "core:log"
-import imgui "../imgui"
-import simgui "../sokol_imgui"
-import sapp "../sokol/app"
-import sg "../sokol/gfx"
-import sglue "../sokol/glue"
-import slog "../sokol/log"
+import imgui "packages:imgui"
+import simgui "packages:sokol_imgui"
+import sapp "packages:sokol/app"
+import sg "packages:sokol/gfx"
+import sglue "packages:sokol/glue"
+import slog "packages:sokol/log"
 
 
 g_context: runtime.Context
@@ -88,7 +89,11 @@ app_init :: proc "c" () {
 	env := sglue.environment()
 	sg.setup({environment = env, logger = {func = slog.func}})
 
-	simgui.setup(&g_app.imgui, {.DockingEnable, .ViewportsEnable})
+	simgui.setup(
+		&g_app.imgui,
+		{ .DockingEnable, .ViewportsEnable },
+		{ rawptr(&fonts.GEIST_MEDIUM_compressed_data[0]), uint(fonts.GEIST_MEDIUM_compressed_size) },
+	)
 	
 	app_hot_reloaded(g_app)
 }

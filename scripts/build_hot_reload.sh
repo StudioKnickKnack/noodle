@@ -3,7 +3,7 @@
 # NOTE: this is a recent addition to the Odin compiler, if you don't have this command
 # you can change this to the path to the Odin folder that contains vendor, eg: "~/Odin".
 ROOT=$(odin root)
-PROJECT=$(dirname "$1")
+PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
 if [ ! $? -eq 0 ]; then
     echo "Your Odin compiler does not have the 'odin root' command, please update or hardcode it in the script."
     exit 1
@@ -19,7 +19,7 @@ case $(uname) in
     *)       LIB_PATH="macos" ;;
     esac
 
-    SOKOL_DYLIB_DIR="$PROJECT/sokol/dylib"
+    SOKOL_DYLIB_DIR="$PROJECT/packages/sokol/dylib"
     SOKOL_DYLIB_NAME="sokol_dylib_macos_arm64_metal_debug.dylib"
     install_name_tool -id @loader_path/sokol/dylib/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME
     #cp $SOKOL_DYLIB_DIR/$SOKOL_DYLIB_NAME $SOKOL_DYLIB_NAME
@@ -42,9 +42,13 @@ case $(uname) in
     ;;
 esac
 
+mkdir -p $PROJECT/build
+pushd $PROJECT/build
+
 # Build the app.
-echo "Building app$DLL_EXT"
-odin build app -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -build-mode:dll -out:app_tmp$DLL_EXT -strict-style -vet -debug
+echo "Building $PROJECT/app -> app$DLL_EXT"
+odin build $PROJECT/app -collection:packages=$PROJECT/packages -define:SOKOL_DLL=true --extra-linker-flags:"$EXTRA_LINKER_FLAGS" -build-mode:dll -out:app_tmp$DLL_EXT -strict-style -vet -debug
+install_name_tool -change @loader_path/sokol/dylib/sokol_dylib_macos_arm64_metal_debug.dylib @rpath/sokol_dylib_macos_arm64_metal_debug.dylib app_tmp$DLL_EXT
 
 # Need to use a temp file on Linux because it first writes an empty `app.so`, which the app will load before it is actually fully written.
 mv app_tmp$DLL_EXT app$DLL_EXT
@@ -56,5 +60,10 @@ if pgrep -fl 'app_hot_reload' | grep -v 'lldb' > /dev/null; then
     exit 1
 else
     echo "Building app_hot_reload"
-    odin build main_hot_reload -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:app_hot_reload -strict-style -vet -debug
+    odin build $PROJECT/main/hot_reload -collection:packages=$PROJECT/packages -define:SOKOL_DLL=true -extra-linker-flags:"-v" -out:app_hot_reload -strict-style -vet -debug
+
+    install_name_tool -add_rpath $PROJECT/packages/sokol/dylib app_hot_reload
+    install_name_tool -change @loader_path/sokol/dylib/sokol_dylib_macos_arm64_metal_debug.dylib @rpath/sokol_dylib_macos_arm64_metal_debug.dylib app_hot_reload
 fi
+
+popd

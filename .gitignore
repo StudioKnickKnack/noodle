@@ -16,8 +16,9 @@ log.txt
 linux
 atlas.png
 pdbs/
+build/
 .layout_state
 app_hot_reload
 .DS_Store
 
-!sokol/dylib/sokol_dylib_macos_arm64_metal_debug.dylib
+!packages/sokol/dylib/sokol_dylib_macos_arm64_metal_debug.dylib

@@ -1,6 +1,6 @@
 package data
 
-import sg "../../sokol/gfx"
+import sg "packages:sokol/gfx"
 
 Style :: struct {
 	bg_color: sg.Color,

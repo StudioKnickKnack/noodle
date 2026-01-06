@@ -2,8 +2,8 @@
 
 package main
 
-import sapp "../sokol/app"
-import slog "../sokol/log"
+import sapp "packages:sokol/app"
+import slog "packages:sokol/log"
 import "base:runtime"
 import "core:c/libc"
 import "core:dynlib"

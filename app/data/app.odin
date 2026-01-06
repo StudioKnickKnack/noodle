@@ -1,6 +1,6 @@
 package data
 
-import simgui "../../sokol_imgui"
+import simgui "packages:sokol_imgui"
 
 App :: struct {
 	models_gen: [dynamic]u32,

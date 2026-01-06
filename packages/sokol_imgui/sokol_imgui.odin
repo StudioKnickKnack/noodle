@@ -3,7 +3,6 @@ package sokol_imgui
 import sg "../sokol/gfx"
 import sapp "../sokol/app"
 import imgui "../imgui"
-import fonts "../fonts"
 import "core:fmt"
 
 @(private)
@@ -39,7 +38,7 @@ g_state: ^State
 @(private)
 MAX_VERTICES :: 65536
 
-setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
+setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}, fonts: ..sg.Range) {
 	g_state = state
 	imgui.CHECKVERSION()
 
@@ -50,7 +49,9 @@ setup :: proc(state: ^State, flags: imgui.ConfigFlags = {}) {
 	imgui.StyleColorsDark()
 
 	io := imgui.GetIO()
-	imgui.FontAtlas_AddFontFromMemoryCompressedTTF(io.Fonts, rawptr(&fonts.GEIST_MEDIUM_compressed_data[0]), i32(fonts.GEIST_MEDIUM_compressed_size))
+	for f in fonts {
+		imgui.FontAtlas_AddFontFromMemoryCompressedTTF(io.Fonts, f.ptr, i32(f.size))
+	}
 	io.IniFilename = ".layout_state"
 	io.ConfigMacOSXBehaviors = ODIN_OS == .Darwin
 	io.BackendRendererName = "sokol-imgui-odin"
