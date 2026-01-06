@@ -3,7 +3,7 @@
 # NOTE: this is a recent addition to the Odin compiler, if you don't have this command
 # you can change this to the path to the Odin folder that contains vendor, eg: "~/Odin".
 ROOT=$(odin root)
-PROJECT=$(dirname "$0")
+PROJECT=$(dirname "$1")
 if [ ! $? -eq 0 ]; then
     echo "Your Odin compiler does not have the 'odin root' command, please update or hardcode it in the script."
     exit 1
